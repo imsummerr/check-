@@ -35,6 +35,7 @@
       <div class="callout" id="calc" style="display:none">
         ควรแพ็คได้ประมาณ <span class="big" id="expBags">–</span> ถุง
         <div class="muted" id="calcDetail"></div>
+        <div id="balLine" style="margin-top:6px"></div>
       </div>
 
       <label for="staff">ผู้บันทึก (ครัวกลาง)</label>
@@ -58,6 +59,8 @@ function toast(msg, ms){ var t=document.getElementById('toast'); t.innerHTML=msg
   clearTimeout(t._h); t._h=setTimeout(function(){t.style.display='none';}, ms||3500); }
 
 function gpbOf(name){ for(var i=0;i<DATA.items.length;i++){ if(DATA.items[i].name===name) return DATA.items[i].gramsPerBag; } return 0; }
+function balOf(name){ return Number((DATA.balances||{})[name]||0); }
+function kg(g){ return Math.round((Number(g)||0)/10)/100; }
 
 function toGrams(){
   var w=parseFloat(document.getElementById('weight').value); if(!(w>0)) return 0;
@@ -67,7 +70,7 @@ function toGrams(){
 function recalc(){
   var item=document.getElementById('item').value;
   var gpb=gpbOf(item), g=toGrams();
-  var box=document.getElementById('calc');
+  var box=document.getElementById('calc'), balLine=document.getElementById('balLine');
   if(item && g>0 && gpb>0){
     var bags=Math.floor(g/gpb), left=g-bags*gpb;
     document.getElementById('expBags').textContent=bags;
@@ -78,7 +81,18 @@ function recalc(){
     document.getElementById('expBags').textContent='?';
     document.getElementById('calcDetail').textContent='สินค้านี้ยังไม่ได้ตั้งค่ากรัม/ถุง (แก้ที่ชีต "รายการสินค้า")';
     box.style.display='block';
+  } else if(item){
+    document.getElementById('expBags').textContent='–';
+    document.getElementById('calcDetail').textContent='กรอกน้ำหนักเพื่อคำนวณจำนวนถุง';
+    box.style.display='block';
   } else { box.style.display='none'; }
+  // แสดงคงเหลือครัวกลาง + เตือนถ้าส่งเกิน
+  if(item){
+    var bal=balOf(item);
+    var after=bal-g;
+    var warn = (g>0 && after<0) ? ' <span class="danger">⚠️ มากกว่าคงเหลือ!</span>' : '';
+    balLine.innerHTML='คงเหลือครัวกลาง '+kg(bal)+' กก.'+(g>0?(' → เหลือ '+kg(after)+' กก.'):'')+warn;
+  } else { balLine.innerHTML=''; }
 }
 
 function load(){

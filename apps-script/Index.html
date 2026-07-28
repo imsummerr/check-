@@ -5,13 +5,16 @@
 <header>
   <div class="wrap" style="padding:0">
     <h1>🌶️ ระบบสต็อกครัวกลางหม่าล่า</h1>
-    <p>สรุปของออก – แพ็ค – ของหาย</p>
+    <p>รับเข้า → ส่งออกสาขา → แพ็ค → ของหาย (ครบวงจร)</p>
   </div>
 </header>
 
 <div class="wrap">
   <div class="card">
-    <a class="btn btn-primary" href="?page=entry" style="text-decoration:none">➕ ครัวกลาง: บันทึกของออกไปสาขา</a>
+    <div class="row">
+      <div><a class="btn btn-primary" href="?page=stockin" style="text-decoration:none">📥 รับเข้าครัวกลาง</a></div>
+      <div><a class="btn btn-primary" href="?page=entry" style="text-decoration:none">📤 ส่งออกไปสาขา</a></div>
+    </div>
   </div>
 
   <div class="card">
@@ -19,7 +22,18 @@
   </div>
 
   <div class="card">
-    <h2>📊 สรุปแยกตามสินค้า</h2>
+    <h2>🏭 คงเหลือที่ครัวกลาง</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>สินค้า</th><th>รับเข้า (กก.)</th><th>ส่งออก (กก.)</th><th>คงเหลือ (กก.)</th></tr></thead>
+        <tbody id="centralBody"></tbody>
+      </table>
+    </div>
+    <div id="centralEmpty" class="muted center" style="padding:16px; display:none">ยังไม่มีข้อมูลรับเข้า/ส่งออก</div>
+  </div>
+
+  <div class="card">
+    <h2>📊 สรุปแยกตามสินค้า (ของหาย)</h2>
     <div class="tablewrap">
       <table>
         <thead><tr><th>สินค้า</th><th>ส่งออก (กก.)</th><th>ควรแพ็ค</th><th>แพ็คได้</th><th>ของหาย</th></tr></thead>
@@ -27,6 +41,28 @@
       </table>
     </div>
     <div id="itemEmpty" class="muted center" style="padding:16px; display:none">ยังไม่มีข้อมูล</div>
+  </div>
+
+  <div class="card">
+    <h2>🏬 สรุปแยกตามสาขา</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>สาขา</th><th>ส่งออก (กก.)</th><th>ควรแพ็ค</th><th>แพ็คได้</th><th>ของหาย</th></tr></thead>
+        <tbody id="branchBody"></tbody>
+      </table>
+    </div>
+    <div id="branchEmpty" class="muted center" style="padding:16px; display:none">ยังไม่มีข้อมูล</div>
+  </div>
+
+  <div class="card">
+    <h2>📅 สรุปรายวัน (14 วันล่าสุด)</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>วันที่</th><th>ส่งออก (กก.)</th><th>แพ็คได้</th><th>ของหาย</th><th>ครั้ง</th></tr></thead>
+        <tbody id="dayBody"></tbody>
+      </table>
+    </div>
+    <div id="dayEmpty" class="muted center" style="padding:16px; display:none">ยังไม่มีข้อมูล</div>
   </div>
 
   <div class="card">
@@ -44,13 +80,18 @@
 <script>
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function kg(g){return (Math.round((Number(g)||0)/10)/100);}
-
 function lossCell(v){
   if(v===''||v==null) return '<span class="muted">–</span>';
   v=Number(v);
   if(v>0) return '<span class="danger">'+v+' ถุง</span>';
   if(v<0) return '<span class="ok">+'+Math.abs(v)+'</span>';
   return '<span class="ok">0</span>';
+}
+function balCell(g){ g=Number(g)||0; var c=g<0?'danger':(g===0?'muted':'ok'); return '<span class="'+c+'">'+kg(g)+'</span>'; }
+function fill(id, rows, emptyId){
+  var b=document.getElementById(id);
+  if(!rows.length){ document.getElementById(emptyId).style.display='block'; return; }
+  b.innerHTML=rows.join('');
 }
 
 google.script.run.withSuccessHandler(function(d){
@@ -61,18 +102,26 @@ google.script.run.withSuccessHandler(function(d){
     '<div class="stat"><div class="n danger">'+t.lossBags+'</div><div class="l">ของหาย (ถุง)</div></div>'+
     '<div class="stat"><div class="n">'+t.n+'</div><div class="l">จำนวนครั้ง</div></div>';
 
-  var ib=document.getElementById('itemBody');
-  if(!d.perItem.length){ document.getElementById('itemEmpty').style.display='block'; }
-  ib.innerHTML=d.perItem.map(function(o){
-    return '<tr><td><strong>'+esc(o.item)+'</strong></td><td>'+kg(o.outG)+'</td><td>'+o.expBags+'</td><td>'+o.packedBags+'</td><td>'+lossCell(o.lossBags)+'</td></tr>';
-  }).join('');
+  fill('centralBody', (d.central||[]).map(function(o){
+    return '<tr><td><strong>'+esc(o.item)+'</strong></td><td>'+kg(o.inG)+'</td><td>'+kg(o.outG)+'</td><td>'+balCell(o.balG)+'</td></tr>';
+  }), 'centralEmpty');
 
-  var rb=document.getElementById('recentBody');
-  if(!d.recent.length){ document.getElementById('recentEmpty').style.display='block'; }
-  rb.innerHTML=d.recent.map(function(r){
+  fill('itemBody', d.perItem.map(function(o){
+    return '<tr><td><strong>'+esc(o.item)+'</strong></td><td>'+kg(o.outG)+'</td><td>'+o.expBags+'</td><td>'+o.packedBags+'</td><td>'+lossCell(o.lossBags)+'</td></tr>';
+  }), 'itemEmpty');
+
+  fill('branchBody', (d.perBranch||[]).map(function(o){
+    return '<tr><td><strong>'+esc(o.branch)+'</strong></td><td>'+kg(o.outG)+'</td><td>'+o.expBags+'</td><td>'+o.packedBags+'</td><td>'+lossCell(o.lossBags)+'</td></tr>';
+  }), 'branchEmpty');
+
+  fill('dayBody', (d.perDay||[]).map(function(o){
+    return '<tr><td>'+esc(o.day)+'</td><td>'+kg(o.outG)+'</td><td>'+o.packedBags+'</td><td>'+lossCell(o.lossBags)+'</td><td>'+o.n+'</td></tr>';
+  }), 'dayEmpty');
+
+  fill('recentBody', d.recent.map(function(r){
     var st=r['สถานะ']==='แพ็คแล้ว'?'<span class="pill done">แพ็คแล้ว</span>':'<span class="pill wait">รอแพ็ค</span>';
     return '<tr><td>'+esc(r['เวลาบันทึก'])+'</td><td>'+esc(r['สินค้า'])+'<br><span class="muted">'+esc(r['ที่กรอก'])+'</span></td><td>'+esc(r['ไปสาขา'])+'</td><td>'+st+'</td><td>'+lossCell(r['ของหาย(ถุง)'])+'</td></tr>';
-  }).join('');
+  }), 'recentEmpty');
 }).withFailureHandler(function(e){
   document.getElementById('stats').innerHTML='<div class="danger">โหลดไม่ได้: '+e.message+'</div>';
 }).getDashboard();

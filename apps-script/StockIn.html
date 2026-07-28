@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="th">
+<head><base target="_top"><?!= include('Style'); ?></head>
+<body>
+<header>
+  <div class="wrap" style="padding:0">
+    <h1>📥 รับเข้าครัวกลาง</h1>
+    <p>บันทึกของที่รับเข้ามาจากซัพพลายเออร์ (ต้นทางสต็อก)</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <form id="f" autocomplete="off">
+      <label for="item">สินค้า *</label>
+      <select id="item" required></select>
+
+      <div class="row">
+        <div>
+          <label for="weight">น้ำหนัก *</label>
+          <input id="weight" type="number" inputmode="decimal" min="0" step="any" placeholder="เช่น 10">
+        </div>
+        <div>
+          <label for="unit">หน่วย</label>
+          <select id="unit">
+            <option value="กิโล">กิโล</option>
+            <option value="กรัม">กรัม</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="callout" id="balBox" style="display:none">
+        คงเหลือครัวกลางตอนนี้: <strong id="balNow">–</strong> กก.
+        <div class="muted" id="balAfter"></div>
+      </div>
+
+      <label for="supplier">ผู้ส่ง / ซัพพลายเออร์</label>
+      <input id="supplier" placeholder="ชื่อร้าน/เจ้าที่ส่งของ">
+
+      <label for="staff">ผู้บันทึก (ครัวกลาง)</label>
+      <input id="staff" placeholder="ชื่อผู้รับของ">
+
+      <label for="note">หมายเหตุ</label>
+      <input id="note" placeholder="เช่น ล็อตเช้า / ของสด">
+
+      <div style="margin-top:16px">
+        <button type="submit" class="btn btn-primary" id="submitBtn">บันทึกรับเข้า</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="center"><a class="link" href="?page=index">📊 ดูสรุป / คงเหลือ</a> &nbsp;•&nbsp; <a class="link" href="?page=entry">➕ ส่งออกไปสาขา</a></div>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<script>
+var DATA = { items: [], balances: {} };
+function toast(msg, ms){ var t=document.getElementById('toast'); t.innerHTML=msg; t.style.display='block';
+  clearTimeout(t._h); t._h=setTimeout(function(){t.style.display='none';}, ms||3500); }
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function kg(g){return Math.round((Number(g)||0)/10)/100;}
+function toGrams(){ var w=parseFloat(document.getElementById('weight').value); if(!(w>0)) return 0;
+  return document.getElementById('unit').value==='กรัม'?w:Math.round(w*1000); }
+
+function recalc(){
+  var item=document.getElementById('item').value, box=document.getElementById('balBox');
+  if(!item){ box.style.display='none'; return; }
+  var bal=Number(DATA.balances[item]||0), g=toGrams();
+  document.getElementById('balNow').textContent=kg(bal);
+  document.getElementById('balAfter').textContent = g>0 ? ('หลังรับเข้าจะเป็น '+kg(bal+g)+' กก.') : '';
+  box.style.display='block';
+}
+
+function load(){
+  google.script.run.withSuccessHandler(function(d){
+    DATA=d;
+    var it=document.getElementById('item'); it.innerHTML='<option value="">— เลือกสินค้า —</option>';
+    d.items.forEach(function(x){ it.insertAdjacentHTML('beforeend','<option>'+esc(x.name)+'</option>'); });
+    var s=localStorage.getItem('staff'); if(s) document.getElementById('staff').value=s;
+  }).withFailureHandler(function(e){ toast('โหลดข้อมูลไม่ได้: '+e.message); }).getStockInData();
+}
+
+['item','weight','unit'].forEach(function(id){
+  document.getElementById(id).addEventListener('input', recalc);
+  document.getElementById(id).addEventListener('change', recalc);
+});
+
+document.getElementById('f').addEventListener('submit', function(e){
+  e.preventDefault();
+  var payload={ item:document.getElementById('item').value,
+    weight:document.getElementById('weight').value, unit:document.getElementById('unit').value,
+    supplier:document.getElementById('supplier').value.trim(),
+    staff:document.getElementById('staff').value.trim(),
+    note:document.getElementById('note').value.trim() };
+  if(!payload.item){ toast('กรุณาเลือกสินค้า'); return; }
+  if(!(parseFloat(payload.weight)>0)){ toast('กรุณากรอกน้ำหนัก'); return; }
+  localStorage.setItem('staff', payload.staff);
+  var btn=document.getElementById('submitBtn');
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span> กำลังบันทึก...';
+  google.script.run.withSuccessHandler(function(res){
+    btn.disabled=false; btn.textContent='บันทึกรับเข้า';
+    DATA.balances[payload.item]=res.balanceG;   // อัปเดตคงเหลือในหน้า
+    toast('รับเข้าแล้ว ✅ • คงเหลือครัวกลาง '+kg(res.balanceG)+' กก.', 4000);
+    document.getElementById('weight').value=''; recalc();
+    document.getElementById('item').focus();
+  }).withFailureHandler(function(err){
+    btn.disabled=false; btn.textContent='บันทึกรับเข้า';
+    toast('ผิดพลาด: '+err.message, 5000);
+  }).submitStockIn(payload);
+});
+
+load();
+</script>
+</body>
+</html>
