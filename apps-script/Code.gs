@@ -45,6 +45,7 @@ function onOpen() {
     .addItem('1) ติดตั้งครั้งแรก (สร้างชีต + ตัวอย่าง)', 'setup')
     .addItem('อัปเดตหน้า "สรุป"', 'updateSummary')
     .addSeparator()
+    .addItem('🧪 ทดสอบส่ง LINE ทุกสาขา', 'testLineAll')
     .addItem('แสดงลิงก์เว็บแอป', 'showWebAppUrl')
     .addToUi();
 }
@@ -556,6 +557,29 @@ function lineReply_(replyToken, text) {
     muteHttpExceptions: true,
     payload: JSON.stringify({ replyToken: replyToken, messages: [{ type: 'text', text: text }] })
   });
+}
+
+/**
+ * ทดสอบส่งข้อความเข้ากลุ่มไลน์ของทุกสาขา
+ * ใช้เช็คว่า LINE_TOKEN และ Group ID ในชีต "สาขา" ถูกต้องไหม
+ * (ปลอดภัยกับระบบแจ้งวันหมดอายุเดิม เพราะเป็นการ push อย่างเดียว ไม่ยุ่งกับ webhook)
+ */
+function testLineAll() {
+  var ui = SpreadsheetApp.getUi();
+  if (!lineToken_()) {
+    ui.alert('ยังไม่ได้ตั้งค่า LINE_TOKEN\n\nไปที่ Project Settings > Script Properties แล้วเพิ่มคีย์ LINE_TOKEN');
+    return;
+  }
+  var brs = getBranches_().filter(function (b) { return b.active; });
+  if (!brs.length) { ui.alert('ยังไม่มีสาขาในชีต "สาขา"'); return; }
+
+  var lines = [];
+  brs.forEach(function (b) {
+    if (!b.groupId) { lines.push('⚠️ ' + b.name + ' — ยังไม่ได้ใส่ Group ID'); return; }
+    var r = linePush_(b.groupId, '🧪 ทดสอบระบบสต็อกครัวกลาง\nสาขา: ' + b.name + '\nถ้าเห็นข้อความนี้ = เชื่อมต่อสำเร็จ ✅');
+    lines.push((r.sent ? '✅ ' : '❌ ') + b.name + (r.sent ? '' : ' — ' + r.msg));
+  });
+  ui.alert('ผลทดสอบส่ง LINE\n\n' + lines.join('\n'));
 }
 
 function notifyBranchNewTransfer_(branch, d) {
