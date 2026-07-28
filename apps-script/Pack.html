@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="th">
+<head><base target="_top"><?!= include('Style'); ?></head>
+<body>
+<header>
+  <div class="wrap" style="padding:0">
+    <h1>📦 สาขา — กรอกจำนวนที่แพ็คได้</h1>
+    <p>บันทึกว่าของที่เข้ามา แพ็คได้จริงกี่ถุง</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="loading" class="card center muted">กำลังโหลด...</div>
+
+  <div id="content" style="display:none">
+    <div class="card">
+      <h2 id="itemName">–</h2>
+      <div class="tablewrap">
+        <table>
+          <tr><th>เข้าจากครัวกลาง</th><td id="entered">–</td></tr>
+          <tr><th>สาขา</th><td id="branch">–</td></tr>
+          <tr><th>ควรแพ็คได้</th><td><strong id="expBags">–</strong> ถุง <span class="muted" id="gpb"></span></td></tr>
+          <tr><th>วันเวลาที่เข้า</th><td id="when">–</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="formCard">
+      <form id="f" autocomplete="off">
+        <label for="packedBags">แพ็คได้จริง (ถุง) *</label>
+        <input id="packedBags" type="number" inputmode="numeric" min="0" step="1" placeholder="เช่น 33">
+
+        <div class="callout" id="lossBox" style="display:none">
+          <div id="lossText"></div>
+        </div>
+
+        <details style="margin:10px 0">
+          <summary class="muted" style="cursor:pointer">+ กรอกน้ำหนักที่แพ็คได้จริง (ถ้าต้องการละเอียด)</summary>
+          <label for="packedWeight">น้ำหนักที่แพ็คได้ (กรัม)</label>
+          <input id="packedWeight" type="number" inputmode="decimal" min="0" step="any" placeholder="ปล่อยว่างได้">
+        </details>
+
+        <label for="packer">ผู้แพ็ค</label>
+        <input id="packer" placeholder="ชื่อพนักงานสาขา">
+
+        <label for="note">หมายเหตุ</label>
+        <input id="note" placeholder="เช่น มีชิ้นเสีย 1 ชิ้น">
+
+        <div style="margin-top:16px">
+          <button type="submit" class="btn btn-primary" id="submitBtn">บันทึกจำนวนที่แพ็คได้</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card" id="doneCard" style="display:none">
+      <div class="center">
+        <div class="pill done">แพ็คแล้ว ✅</div>
+        <div id="doneSummary" style="margin-top:14px; font-size:15px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<script>
+var ID = '<?= transferId ?>';
+var T = null;
+
+function toast(msg, ms){ var t=document.getElementById('toast'); t.innerHTML=msg; t.style.display='block';
+  clearTimeout(t._h); t._h=setTimeout(function(){t.style.display='none';}, ms||4000); }
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+
+function recalcLoss(){
+  if(!T) return;
+  var exp=Number(T['ควรแพ็ค(ถุง)'])||0;
+  var packed=parseInt(document.getElementById('packedBags').value,10);
+  var box=document.getElementById('lossBox'), txt=document.getElementById('lossText');
+  if(isNaN(packed)){ box.style.display='none'; return; }
+  var gpb=Number(T['กรัมต่อถุง'])||0;
+  var loss=exp-packed, lossG=gpb?loss*gpb:null;
+  box.style.display='block';
+  if(!exp){ txt.innerHTML='บันทึกจำนวน '+packed+' ถุง'; return; }
+  if(loss>0){ txt.innerHTML='<span class="danger big">ของหาย/ขาด '+loss+' ถุง</span>'+(lossG?' <span class="muted">(~'+lossG+' ก.)</span>':''); }
+  else if(loss<0){ txt.innerHTML='<span class="ok big">แพ็คได้เกินคาด '+Math.abs(loss)+' ถุง</span>'; }
+  else { txt.innerHTML='<span class="ok big">ครบพอดี</span> ไม่มีของหาย 🎉'; }
+}
+
+function showDone(){
+  document.getElementById('formCard').style.display='none';
+  var d=document.getElementById('doneCard'); d.style.display='block';
+  var exp=Number(T['ควรแพ็ค(ถุง)'])||0, packed=Number(T['แพ็คได้(ถุง)'])||0, loss=T['ของหาย(ถุง)'];
+  var lossHtml = (loss===''||loss==null) ? '' :
+    (Number(loss)>0 ? '<div class="danger">ของหาย '+loss+' ถุง'+(T['ของหาย(กรัม)']?(' (~'+T['ของหาย(กรัม)']+' ก.)'):'')+'</div>'
+     : Number(loss)<0 ? '<div class="ok">เกินคาด '+Math.abs(loss)+' ถุง</div>'
+     : '<div class="ok">ครบพอดี</div>');
+  document.getElementById('doneSummary').innerHTML=
+    '<strong>'+esc(T['สินค้า'])+'</strong> ('+esc(T['ที่กรอก'])+')<br>'+
+    'ควรได้ '+exp+' ถุง / แพ็คจริง '+packed+' ถุง'+lossHtml+
+    (T['ผู้แพ็ค']?('<div class="muted" style="margin-top:6px">โดย '+esc(T['ผู้แพ็ค'])+'</div>'):'');
+}
+
+function fill(){
+  document.getElementById('itemName').textContent=T['สินค้า'];
+  document.getElementById('entered').textContent=T['ที่กรอก'];
+  document.getElementById('branch').textContent=T['ไปสาขา'];
+  document.getElementById('expBags').textContent=(T['ควรแพ็ค(ถุง)']===''?'–':T['ควรแพ็ค(ถุง)']);
+  document.getElementById('gpb').textContent=T['กรัมต่อถุง']?('('+T['กรัมต่อถุง']+' ก./ถุง)'):'';
+  document.getElementById('when').textContent=T['เวลาบันทึก'];
+  document.getElementById('loading').style.display='none';
+  document.getElementById('content').style.display='block';
+  if(T['สถานะ']==='แพ็คแล้ว') showDone();
+}
+
+google.script.run.withSuccessHandler(function(t){ T=t; fill(); })
+  .withFailureHandler(function(e){ document.getElementById('loading').textContent='โหลดไม่ได้: '+e.message; })
+  .getTransfer(ID);
+
+document.getElementById('packedBags').addEventListener('input', recalcLoss);
+
+document.getElementById('f').addEventListener('submit', function(e){
+  e.preventDefault();
+  var packed=parseInt(document.getElementById('packedBags').value,10);
+  if(!(packed>=0)){ toast('กรุณากรอกจำนวนถุงที่แพ็คได้'); return; }
+  var btn=document.getElementById('submitBtn');
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span> กำลังบันทึก...';
+  var payload={ id:ID, packedBags:packed,
+    packedWeight:document.getElementById('packedWeight').value,
+    packer:document.getElementById('packer').value.trim(),
+    note:document.getElementById('note').value.trim() };
+  google.script.run.withSuccessHandler(function(res){
+    T['สถานะ']='แพ็คแล้ว'; T['แพ็คได้(ถุง)']=res.packedBags; T['ของหาย(ถุง)']=res.lossBags;
+    T['ของหาย(กรัม)']=res.lossGrams; T['ผู้แพ็ค']=payload.packer;
+    toast('บันทึกเรียบร้อย ✅'); showDone();
+  }).withFailureHandler(function(err){
+    btn.disabled=false; btn.textContent='บันทึกจำนวนที่แพ็คได้';
+    toast('ผิดพลาด: '+err.message, 5000);
+  }).submitPack(payload);
+});
+</script>
+</body>
+</html>

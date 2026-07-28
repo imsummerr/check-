@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="th">
+<head><base target="_top"><?!= include('Style'); ?></head>
+<body>
+<header>
+  <div class="wrap" style="padding:0">
+    <h1>🌶️ ครัวกลาง — บันทึกของออก</h1>
+    <p>กรอกของที่ส่งไปสาขา แล้วระบบจะแจ้ง LINE ให้สาขาโดยอัตโนมัติ</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <form id="f" autocomplete="off">
+      <label for="branch">ส่งไปสาขา *</label>
+      <select id="branch" required></select>
+
+      <label for="item">สินค้า *</label>
+      <select id="item" required></select>
+
+      <div class="row">
+        <div>
+          <label for="weight">น้ำหนัก *</label>
+          <input id="weight" type="number" inputmode="decimal" min="0" step="any" placeholder="เช่น 1">
+        </div>
+        <div>
+          <label for="unit">หน่วย</label>
+          <select id="unit">
+            <option value="กิโล">กิโล</option>
+            <option value="กรัม">กรัม</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="callout" id="calc" style="display:none">
+        ควรแพ็คได้ประมาณ <span class="big" id="expBags">–</span> ถุง
+        <div class="muted" id="calcDetail"></div>
+      </div>
+
+      <label for="staff">ผู้บันทึก (ครัวกลาง)</label>
+      <input id="staff" placeholder="ชื่อผู้ส่งของ">
+
+      <div style="margin-top:16px">
+        <button type="submit" class="btn btn-primary" id="submitBtn">บันทึก + แจ้ง LINE สาขา</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="center"><a class="link" href="?page=index">📊 ดูสรุป / ประวัติ</a></div>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<script>
+var DATA = { items: [], branches: [] };
+
+function toast(msg, ms){ var t=document.getElementById('toast'); t.innerHTML=msg; t.style.display='block';
+  clearTimeout(t._h); t._h=setTimeout(function(){t.style.display='none';}, ms||3500); }
+
+function gpbOf(name){ for(var i=0;i<DATA.items.length;i++){ if(DATA.items[i].name===name) return DATA.items[i].gramsPerBag; } return 0; }
+
+function toGrams(){
+  var w=parseFloat(document.getElementById('weight').value); if(!(w>0)) return 0;
+  return document.getElementById('unit').value==='กรัม' ? w : Math.round(w*1000);
+}
+
+function recalc(){
+  var item=document.getElementById('item').value;
+  var gpb=gpbOf(item), g=toGrams();
+  var box=document.getElementById('calc');
+  if(item && g>0 && gpb>0){
+    var bags=Math.floor(g/gpb), left=g-bags*gpb;
+    document.getElementById('expBags').textContent=bags;
+    document.getElementById('calcDetail').textContent=
+      g+' ก. ÷ '+gpb+' ก./ถุง'+(left>0?(' (เหลือเศษ '+left+' ก.)'):'');
+    box.style.display='block';
+  } else if(item && g>0 && gpb===0){
+    document.getElementById('expBags').textContent='?';
+    document.getElementById('calcDetail').textContent='สินค้านี้ยังไม่ได้ตั้งค่ากรัม/ถุง (แก้ที่ชีต "รายการสินค้า")';
+    box.style.display='block';
+  } else { box.style.display='none'; }
+}
+
+function load(){
+  google.script.run.withSuccessHandler(function(d){
+    DATA=d;
+    var b=document.getElementById('branch'); b.innerHTML='';
+    d.branches.filter(function(x){return x.active;}).forEach(function(x){
+      b.insertAdjacentHTML('beforeend','<option>'+esc(x.name)+'</option>'); });
+    var it=document.getElementById('item'); it.innerHTML='<option value="">— เลือกสินค้า —</option>';
+    d.items.forEach(function(x){ it.insertAdjacentHTML('beforeend','<option>'+esc(x.name)+'</option>'); });
+    var s=localStorage.getItem('staff'); if(s) document.getElementById('staff').value=s;
+  }).withFailureHandler(function(e){ toast('โหลดข้อมูลไม่ได้: '+e.message); }).getEntryData();
+}
+
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+
+['item','weight','unit'].forEach(function(id){
+  document.getElementById(id).addEventListener('input', recalc);
+  document.getElementById(id).addEventListener('change', recalc);
+});
+
+document.getElementById('f').addEventListener('submit', function(e){
+  e.preventDefault();
+  var btn=document.getElementById('submitBtn');
+  var payload={
+    branch:document.getElementById('branch').value,
+    item:document.getElementById('item').value,
+    weight:document.getElementById('weight').value,
+    unit:document.getElementById('unit').value,
+    staff:document.getElementById('staff').value.trim()
+  };
+  if(!payload.item){ toast('กรุณาเลือกสินค้า'); return; }
+  if(!(parseFloat(payload.weight)>0)){ toast('กรุณากรอกน้ำหนัก'); return; }
+  localStorage.setItem('staff', payload.staff);
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span> กำลังบันทึก...';
+  google.script.run.withSuccessHandler(function(res){
+    btn.disabled=false; btn.textContent='บันทึก + แจ้ง LINE สาขา';
+    var line = res.lineSent ? '✅ แจ้ง LINE สาขาแล้ว' : ('⚠️ ยังไม่ได้ส่ง LINE ('+res.lineMsg+')');
+    toast('บันทึกแล้ว • ควรแพ็ค ~'+(res.expectedBags===''?'–':res.expectedBags)+' ถุง<br>'+line, 5000);
+    document.getElementById('weight').value=''; recalc();
+    document.getElementById('item').focus();
+  }).withFailureHandler(function(err){
+    btn.disabled=false; btn.textContent='บันทึก + แจ้ง LINE สาขา';
+    toast('ผิดพลาด: '+err.message, 5000);
+  }).submitTransfer(payload);
+});
+
+load();
+</script>
+</body>
+</html>
