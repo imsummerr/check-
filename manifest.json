@@ -1,0 +1,19 @@
+{
+  "name": "บันทึกเวลาเข้าสต็อก – ครัวกลางหม่าล่า",
+  "short_name": "สต็อกหม่าล่า",
+  "description": "บันทึกเวลาของเข้าสต็อกที่ครัวกลางหม่าล่าและแต่ละสาขา",
+  "lang": "th",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f5f7",
+  "theme_color": "#c0392b",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%23c0392b'/%3E%3Ctext x='256' y='340' font-size='300' text-anchor='middle'%3E%F0%9F%8C%B6%EF%B8%8F%3C/text%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
