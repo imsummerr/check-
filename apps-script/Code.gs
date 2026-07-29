@@ -103,6 +103,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('🌶️ ระบบสต็อก')
     .addItem('1) ติดตั้งครั้งแรก (สร้างชีต + รายการสินค้า)', 'setup')
+    .addItem('🔄 รีเซ็ตรายการสินค้า (ใส่ใหม่ทั้งหมด)', 'resetItems')
     .addItem('อัปเดตหน้า "สรุป"', 'updateSummary')
     .addSeparator()
     .addItem('🧪 ทดสอบส่ง LINE ทุกสาขา', 'testLineAll')
@@ -115,17 +116,12 @@ function setup() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
   // ---- รายการสินค้า ----
-  var items = ensureSheet_(ss, SH.ITEMS, I_COLS);
-  if (items.getLastRow() < 2) {
-    var rows = DEFAULT_ITEMS.map(function (r) {
-      return [r[0], r[1], r[2], r[3], r[4], ''];
-    });
-    items.getRange(2, 1, rows.length, I_COLS.length).setValues(rows);
-    items.setColumnWidth(1, 190);
-    // ตัวเลือกหน่วยวัดแบบ dropdown กันพิมพ์ผิด
-    var rule = SpreadsheetApp.newDataValidation()
-      .requireValueInList([U_GRAM, U_PIECE], true).setAllowInvalid(false).build();
-    items.getRange(2, 3, Math.max(rows.length, 200), 1).setDataValidation(rule);
+  // ใส่ใหม่เมื่อ: ยังไม่มีชีต / ว่าง / หัวคอลัมน์เป็นรูปแบบเก่า (ไม่มีคอลัมน์ "หน่วยวัด")
+  var items = ss.getSheetByName(SH.ITEMS);
+  var seeded = false;
+  if (!items || items.getLastRow() < 2 || !itemsHeaderOk_(items)) {
+    writeItemsSheet_();
+    seeded = true;
   }
 
   // ---- สาขา ----
@@ -150,7 +146,10 @@ function setup() {
 
   SpreadsheetApp.getUi().alert(
     'ติดตั้งเรียบร้อย ✅\n\n' +
-    'ใส่รายการสินค้าให้แล้ว ' + DEFAULT_ITEMS.length + ' รายการ (แก้ไข/เพิ่ม/ลบได้ที่ชีต "รายการสินค้า")\n\n' +
+    (seeded
+      ? ('ใส่รายการสินค้าให้แล้ว ' + DEFAULT_ITEMS.length + ' รายการ (แก้ไข/เพิ่ม/ลบได้ที่ชีต "รายการสินค้า")')
+      : ('ชีต "รายการสินค้า" มีข้อมูลอยู่แล้ว จึงไม่เขียนทับ\n' +
+         'ถ้าต้องการใส่รายการมาตรฐาน ' + DEFAULT_ITEMS.length + ' รายการใหม่ ให้กดเมนู "🔄 รีเซ็ตรายการสินค้า"')) + '\n\n' +
     'ขั้นต่อไป (ดูละเอียดใน SETUP.md):\n' +
     '1. ใส่ชื่อสาขา + LINE Group ID ที่ชีต "สาขา"\n' +
     '2. ใส่ LINE token ที่ Project Settings > Script Properties (คีย์ LINE_TOKEN)\n' +
@@ -159,14 +158,62 @@ function setup() {
   );
 }
 
+/** หัวคอลัมน์ของชีตรายการสินค้าเป็นรูปแบบใหม่หรือยัง (ต้องมี "หน่วยวัด") */
+function itemsHeaderOk_(sh) {
+  var w = Math.max(sh.getLastColumn(), 1);
+  var head = sh.getRange(1, 1, 1, w).getValues()[0].map(function (c) { return String(c).trim(); });
+  return head.indexOf('หน่วยวัด') >= 0 && head.indexOf('หน่วยขาย') >= 0;
+}
+
+/** เขียนชีต "รายการสินค้า" ใหม่ทั้งหมด (ล้างของเดิม) */
+function writeItemsSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(SH.ITEMS) || ss.insertSheet(SH.ITEMS);
+  sh.clear();
+  sh.getRange(1, 1, 1, I_COLS.length).setValues([I_COLS])
+    .setFontWeight('bold').setBackground('#c0392b').setFontColor('#ffffff');
+  sh.setFrozenRows(1);
+
+  var rows = DEFAULT_ITEMS.map(function (r) { return [r[0], r[1], r[2], r[3], r[4], '']; });
+  sh.getRange(2, 1, rows.length, I_COLS.length).setValues(rows);
+  sh.setColumnWidth(1, 190);
+
+  // dropdown กันพิมพ์หน่วยผิด
+  sh.getRange(2, 3, Math.max(rows.length, 200), 1).setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList([U_GRAM, U_PIECE], true).setAllowInvalid(false).build());
+  sh.getRange(2, 4, Math.max(rows.length, 200), 1).setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList(['ถุง', 'ไม้'], true).setAllowInvalid(false).build());
+
+  return rows.length;
+}
+
+/** เมนู: ล้างรายการสินค้าเดิมแล้วใส่ชุดมาตรฐานใหม่ */
+function resetItems() {
+  var ui = SpreadsheetApp.getUi();
+  var ans = ui.alert('รีเซ็ตรายการสินค้า',
+    'จะลบข้อมูลในชีต "รายการสินค้า" ทั้งหมด แล้วใส่รายการมาตรฐาน ' + DEFAULT_ITEMS.length + ' รายการแทน\n\n' +
+    'สินค้าที่เพิ่ม/แก้ไว้เองจะหายทั้งหมด — ต้องการทำต่อหรือไม่?',
+    ui.ButtonSet.YES_NO);
+  if (ans !== ui.Button.YES) return;
+  var n = writeItemsSheet_();
+  ui.alert('เรียบร้อย ✅\n\nใส่รายการสินค้าใหม่ ' + n + ' รายการแล้ว\n' +
+           '(ชั่งกรัม → ถุง และ นับชิ้น → ไม้/ถุง)');
+}
+
 function ensureSheet_(ss, name, headers) {
   var sh = ss.getSheetByName(name);
   if (!sh) sh = ss.insertSheet(name);
-  var cur = sh.getRange(1, 1, 1, Math.max(headers.length, sh.getLastColumn() || 1)).getValues()[0];
-  if (!cur[0]) {
-    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sh.getRange(1, 1, 1, headers.length).setFontWeight('bold')
-      .setBackground('#c0392b').setFontColor('#ffffff');
+  var width = Math.max(headers.length, sh.getLastColumn() || 1);
+  var cur = sh.getRange(1, 1, 1, width).getValues()[0].map(function (c) { return String(c).trim(); });
+
+  // เขียนหัวคอลัมน์เมื่อ: ยังว่าง หรือ เป็นรูปแบบเก่าและยังไม่มีข้อมูล (ปลอดภัย ไม่ทำข้อมูลเหลื่อม)
+  var mismatch = headers.some(function (h, i) { return cur[i] !== h; });
+  if (!cur[0] || (mismatch && sh.getLastRow() < 2)) {
+    if (mismatch && cur[0]) sh.getRange(1, 1, 1, width).clearContent();
+    sh.getRange(1, 1, 1, headers.length).setValues([headers])
+      .setFontWeight('bold').setBackground('#c0392b').setFontColor('#ffffff');
     sh.setFrozenRows(1);
   }
   return sh;
