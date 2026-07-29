@@ -635,13 +635,16 @@ function testLineAll() {
 function notifyBranchNewTransfer_(branch, d) {
   var link = getWebAppUrl_() + '?page=pack&id=' + encodeURIComponent(d.id);
   var it = d.item;
+  // แสดงปริมาณที่แปลงแล้วเฉพาะตอนที่ต่างจากที่กรอก (เช่น กรอก 1500 กรัม → 1.5 กก.)
+  var pretty = fmtQty_(d.qty, it.measureUnit);
+  var qtyLine = d.entered + (pretty !== d.entered ? ('  (' + pretty + ')') : '');
   var expLine = (d.expected !== '' && d.expected != null)
     ? ('📦 ควรแพ็คได้ ~' + d.expected + ' ' + it.sellUnit +
        ' (' + it.perUnit + ' ' + it.measureUnit + '/' + it.sellUnit + ')')
     : '📦 (ยังไม่ได้ตั้งค่าปริมาณต่อหน่วยของสินค้านี้)';
   var text =
     '🔔 มีของเข้า → ' + branch + '\n' +
-    '• ' + it.name + '  ' + d.entered + '  (' + fmtQty_(d.qty, it.measureUnit) + ')\n' +
+    '• ' + it.name + '  ' + qtyLine + '\n' +
     expLine + '\n\n' +
     '👉 แพ็คเสร็จแล้วกดกรอกที่นี่:\n' + link;
   return linePush_(branchGroupId_(branch), text);
