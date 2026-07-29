@@ -4,8 +4,8 @@
 <body>
 <header>
   <div class="wrap" style="padding:0">
-    <h1>🌶️ ครัวกลาง — บันทึกของออก</h1>
-    <p>กรอกของที่ส่งไปสาขา แล้วระบบจะแจ้ง LINE ให้สาขาโดยอัตโนมัติ</p>
+    <h1>📤 ครัวกลาง — ส่งของไปสาขา</h1>
+    <p>กรอกของที่ส่งไปสาขา ระบบจะแจ้ง LINE ให้สาขาอัตโนมัติ</p>
   </div>
 </header>
 
@@ -20,20 +20,17 @@
 
       <div class="row">
         <div>
-          <label for="weight">น้ำหนัก *</label>
-          <input id="weight" type="number" inputmode="decimal" min="0" step="any" placeholder="เช่น 1">
+          <label for="qty" id="qtyLabel">จำนวน *</label>
+          <input id="qty" type="number" inputmode="decimal" min="0" step="any" placeholder="เช่น 1">
         </div>
         <div>
           <label for="unit">หน่วย</label>
-          <select id="unit">
-            <option value="กิโล">กิโล</option>
-            <option value="กรัม">กรัม</option>
-          </select>
+          <select id="unit"></select>
         </div>
       </div>
 
       <div class="callout" id="calc" style="display:none">
-        ควรแพ็คได้ประมาณ <span class="big" id="expBags">–</span> ถุง
+        ควรแพ็คได้ประมาณ <span class="big" id="expNum">–</span> <span class="big" id="expUnit"></span>
         <div class="muted" id="calcDetail"></div>
         <div id="balLine" style="margin-top:6px"></div>
       </div>
@@ -47,52 +44,82 @@
     </form>
   </div>
 
-  <div class="center"><a class="link" href="?page=index">📊 ดูสรุป / ประวัติ</a></div>
+  <div class="center">
+    <a class="link" href="?page=index">📊 ดูสรุป</a> &nbsp;•&nbsp;
+    <a class="link" href="?page=stockin">📥 รับเข้าครัวกลาง</a>
+  </div>
 </div>
 
 <div id="toast" class="toast" style="display:none"></div>
 
 <script>
-var DATA = { items: [], branches: [] };
+var DATA = { items: [], branches: [], balances: {} };
 
 function toast(msg, ms){ var t=document.getElementById('toast'); t.innerHTML=msg; t.style.display='block';
   clearTimeout(t._h); t._h=setTimeout(function(){t.style.display='none';}, ms||3500); }
-
-function gpbOf(name){ for(var i=0;i<DATA.items.length;i++){ if(DATA.items[i].name===name) return DATA.items[i].gramsPerBag; } return 0; }
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function itemOf(name){ for(var i=0;i<DATA.items.length;i++){ if(DATA.items[i].name===name) return DATA.items[i]; } return null; }
 function balOf(name){ return Number((DATA.balances||{})[name]||0); }
-function kg(g){ return Math.round((Number(g)||0)/10)/100; }
 
-function toGrams(){
-  var w=parseFloat(document.getElementById('weight').value); if(!(w>0)) return 0;
-  return document.getElementById('unit').value==='กรัม' ? w : Math.round(w*1000);
+/** แสดงปริมาณตามหน่วยของสินค้า */
+function fmtQty(q, mu){
+  q=Number(q)||0;
+  if(mu==='ชิ้น') return q+' ชิ้น';
+  return Math.abs(q)>=1000 ? (Math.round(q/10)/100+' กก.') : (q+' ก.');
+}
+
+/** ปรับตัวเลือกหน่วยตามชนิดสินค้า */
+function syncUnits(){
+  var it=itemOf(document.getElementById('item').value);
+  var u=document.getElementById('unit'), lbl=document.getElementById('qtyLabel');
+  var prev=u.value;
+  u.innerHTML='';
+  if(it && it.measureUnit==='ชิ้น'){
+    u.innerHTML='<option value="ชิ้น">ชิ้น</option>';
+    lbl.textContent='จำนวน (ชิ้น) *';
+  } else {
+    u.innerHTML='<option value="กิโล">กิโล</option><option value="กรัม">กรัม</option>';
+    lbl.textContent='น้ำหนัก *';
+    if(prev==='กรัม') u.value='กรัม';
+  }
+}
+
+/** แปลงค่าที่กรอก → หน่วยฐานของสินค้า */
+function toBase(){
+  var it=itemOf(document.getElementById('item').value);
+  var n=parseFloat(document.getElementById('qty').value);
+  if(!it || !(n>0)) return 0;
+  if(it.measureUnit==='ชิ้น') return Math.round(n);
+  return document.getElementById('unit').value==='กรัม' ? n : Math.round(n*1000);
 }
 
 function recalc(){
-  var item=document.getElementById('item').value;
-  var gpb=gpbOf(item), g=toGrams();
+  var it=itemOf(document.getElementById('item').value);
   var box=document.getElementById('calc'), balLine=document.getElementById('balLine');
-  if(item && g>0 && gpb>0){
-    var bags=Math.floor(g/gpb), left=g-bags*gpb;
-    document.getElementById('expBags').textContent=bags;
+  if(!it){ box.style.display='none'; return; }
+  var q=toBase(), per=it.perUnit;
+  box.style.display='block';
+  document.getElementById('expUnit').textContent=it.sellUnit;
+
+  if(q>0 && per>0){
+    var n=Math.floor(q/per), left=q-n*per;
+    document.getElementById('expNum').textContent=n;
     document.getElementById('calcDetail').textContent=
-      g+' ก. ÷ '+gpb+' ก./ถุง'+(left>0?(' (เหลือเศษ '+left+' ก.)'):'');
-    box.style.display='block';
-  } else if(item && g>0 && gpb===0){
-    document.getElementById('expBags').textContent='?';
-    document.getElementById('calcDetail').textContent='สินค้านี้ยังไม่ได้ตั้งค่ากรัม/ถุง (แก้ที่ชีต "รายการสินค้า")';
-    box.style.display='block';
-  } else if(item){
-    document.getElementById('expBags').textContent='–';
-    document.getElementById('calcDetail').textContent='กรอกน้ำหนักเพื่อคำนวณจำนวนถุง';
-    box.style.display='block';
-  } else { box.style.display='none'; }
-  // แสดงคงเหลือครัวกลาง + เตือนถ้าส่งเกิน
-  if(item){
-    var bal=balOf(item);
-    var after=bal-g;
-    var warn = (g>0 && after<0) ? ' <span class="danger">⚠️ มากกว่าคงเหลือ!</span>' : '';
-    balLine.innerHTML='คงเหลือครัวกลาง '+kg(bal)+' กก.'+(g>0?(' → เหลือ '+kg(after)+' กก.'):'')+warn;
-  } else { balLine.innerHTML=''; }
+      fmtQty(q,it.measureUnit)+' ÷ '+per+' '+it.measureUnit+'/'+it.sellUnit+
+      (left>0?(' (เหลือเศษ '+left+' '+it.measureUnit+')'):'');
+  } else if(q>0 && !per){
+    document.getElementById('expNum').textContent='?';
+    document.getElementById('calcDetail').textContent='ยังไม่ได้ตั้งค่า "ปริมาณต่อหน่วย" ของสินค้านี้';
+  } else {
+    document.getElementById('expNum').textContent='–';
+    document.getElementById('calcDetail').textContent=
+      'กรอก'+(it.measureUnit==='ชิ้น'?'จำนวนชิ้น':'น้ำหนัก')+'เพื่อคำนวณ';
+  }
+
+  var bal=balOf(it.name), after=bal-q;
+  var warn=(q>0 && after<0) ? ' <span class="danger">⚠️ มากกว่าคงเหลือ!</span>' : '';
+  balLine.innerHTML='คงเหลือครัวกลาง '+fmtQty(bal,it.measureUnit)+
+    (q>0?(' → เหลือ '+fmtQty(after,it.measureUnit)):'')+warn;
 }
 
 function load(){
@@ -101,39 +128,52 @@ function load(){
     var b=document.getElementById('branch'); b.innerHTML='';
     d.branches.filter(function(x){return x.active;}).forEach(function(x){
       b.insertAdjacentHTML('beforeend','<option>'+esc(x.name)+'</option>'); });
-    var it=document.getElementById('item'); it.innerHTML='<option value="">— เลือกสินค้า —</option>';
-    d.items.forEach(function(x){ it.insertAdjacentHTML('beforeend','<option>'+esc(x.name)+'</option>'); });
+
+    var it=document.getElementById('item');
+    it.innerHTML='<option value="">— เลือกสินค้า —</option>';
+    var cats={};
+    d.items.forEach(function(x){ (cats[x.category||'อื่น ๆ']=cats[x.category||'อื่น ๆ']||[]).push(x); });
+    Object.keys(cats).forEach(function(c){
+      var g='<optgroup label="'+esc(c)+'">';
+      cats[c].forEach(function(x){
+        g+='<option value="'+esc(x.name)+'">'+esc(x.name)+' — '+x.perUnit+' '+esc(x.measureUnit)+'/'+esc(x.sellUnit)+'</option>';
+      });
+      it.insertAdjacentHTML('beforeend', g+'</optgroup>');
+    });
+
+    syncUnits();
     var s=localStorage.getItem('staff'); if(s) document.getElementById('staff').value=s;
   }).withFailureHandler(function(e){ toast('โหลดข้อมูลไม่ได้: '+e.message); }).getEntryData();
 }
 
-function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-
-['item','weight','unit'].forEach(function(id){
+document.getElementById('item').addEventListener('change', function(){ syncUnits(); recalc(); });
+['qty','unit'].forEach(function(id){
   document.getElementById(id).addEventListener('input', recalc);
   document.getElementById(id).addEventListener('change', recalc);
 });
 
 document.getElementById('f').addEventListener('submit', function(e){
   e.preventDefault();
-  var btn=document.getElementById('submitBtn');
   var payload={
     branch:document.getElementById('branch').value,
     item:document.getElementById('item').value,
-    weight:document.getElementById('weight').value,
-    unit:document.getElementById('unit').value,
+    qty:document.getElementById('qty').value,
+    inputUnit:document.getElementById('unit').value,
     staff:document.getElementById('staff').value.trim()
   };
   if(!payload.item){ toast('กรุณาเลือกสินค้า'); return; }
-  if(!(parseFloat(payload.weight)>0)){ toast('กรุณากรอกน้ำหนัก'); return; }
+  if(!(parseFloat(payload.qty)>0)){ toast('กรุณากรอกจำนวน'); return; }
   localStorage.setItem('staff', payload.staff);
+
+  var used=toBase(), it=itemOf(payload.item);
+  var btn=document.getElementById('submitBtn');
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> กำลังบันทึก...';
   google.script.run.withSuccessHandler(function(res){
     btn.disabled=false; btn.textContent='บันทึก + แจ้ง LINE สาขา';
-    var line = res.lineSent ? '✅ แจ้ง LINE สาขาแล้ว' : ('⚠️ ยังไม่ได้ส่ง LINE ('+res.lineMsg+')');
-    toast('บันทึกแล้ว • ควรแพ็ค ~'+(res.expectedBags===''?'–':res.expectedBags)+' ถุง<br>'+line, 5000);
-    document.getElementById('weight').value=''; recalc();
-    document.getElementById('item').focus();
+    DATA.balances[payload.item]=balOf(payload.item)-used;
+    var line=res.lineSent?'✅ แจ้ง LINE สาขาแล้ว':('⚠️ ยังไม่ได้ส่ง LINE ('+res.lineMsg+')');
+    toast('บันทึกแล้ว • ควรแพ็ค ~'+(res.expected===''?'–':res.expected)+' '+res.sellUnit+'<br>'+line, 5000);
+    document.getElementById('qty').value=''; recalc();
   }).withFailureHandler(function(err){
     btn.disabled=false; btn.textContent='บันทึก + แจ้ง LINE สาขา';
     toast('ผิดพลาด: '+err.message, 5000);

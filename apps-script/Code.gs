@@ -5,6 +5,10 @@
  *  - เป็นทั้งฐานข้อมูล (Google Sheet) และเว็บแอป (HtmlService)
  *  - แจ้งเตือนผ่าน LINE Official Account (Messaging API)
  *
+ * รองรับสินค้า 2 แบบ:
+ *  1) ชั่งน้ำหนัก  — เช่น สันคอ 30 กรัม/ถุง  → กรอกเป็นกิโล/กรัม
+ *  2) นับชิ้น      — เช่น ปูอัด 2 ชิ้น/ไม้    → กรอกเป็นจำนวนชิ้น
+ *
  * ตั้งค่าครั้งแรก: เปิดชีต > เมนู "🌶️ ระบบสต็อก" > "1) ติดตั้งครั้งแรก"
  * แล้วทำตามไฟล์ SETUP.md
  */
@@ -22,27 +26,83 @@ var SH = {
   LINEIDS:   'LINE_IDs'
 };
 
-// ลำดับหัวคอลัมน์ของชีต "รับเข้าครัวกลาง" (ห้ามสลับลำดับ)
-var SI_COLS = ['วันที่', 'สินค้า', 'น้ำหนัก(กรัม)', 'ที่กรอก', 'ผู้ส่ง/ซัพพลายเออร์', 'ผู้บันทึก', 'หมายเหตุ'];
-
 var CENTRAL_NAME = 'ครัวกลาง';
 
-// ลำดับหัวคอลัมน์ของชีต "บันทึกโอน" (ห้ามสลับลำดับ)
+var U_GRAM  = 'กรัม';   // หน่วยวัดแบบชั่ง
+var U_PIECE = 'ชิ้น';   // หน่วยวัดแบบนับ
+
+// หัวคอลัมน์ชีต "รายการสินค้า" (ห้ามสลับลำดับ)
+var I_COLS = ['สินค้า', 'ปริมาณต่อหน่วย', 'หน่วยวัด', 'หน่วยขาย', 'หมวด', 'หมายเหตุ'];
+
+// หัวคอลัมน์ชีต "รับเข้าครัวกลาง" (ห้ามสลับลำดับ)
+var SI_COLS = ['วันที่', 'สินค้า', 'ปริมาณเข้า', 'หน่วยวัด', 'ที่กรอก',
+               'ผู้ส่ง/ซัพพลายเออร์', 'ผู้บันทึก', 'หมายเหตุ'];
+
+// หัวคอลัมน์ชีต "บันทึกโอน" (ห้ามสลับลำดับ)
 var T_COLS = [
-  'รหัส', 'วันที่', 'เวลาบันทึก', 'สินค้า', 'น้ำหนักเข้า(กรัม)', 'ที่กรอก',
-  'จาก', 'ไปสาขา', 'กรัมต่อถุง', 'ควรแพ็ค(ถุง)', 'สถานะ',
-  'แพ็คได้(ถุง)', 'น้ำหนักที่แพ็ค(กรัม)', 'ของหาย(ถุง)', 'ของหาย(กรัม)',
-  'เวลาแพ็ค', 'ผู้แพ็ค', 'ผู้บันทึก', 'หมายเหตุ'
+  'รหัส', 'วันที่', 'เวลาบันทึก', 'สินค้า', 'ปริมาณเข้า', 'หน่วยวัด', 'ที่กรอก',
+  'จาก', 'ไปสาขา', 'ปริมาณต่อหน่วย', 'หน่วยขาย', 'ควรแพ็ค', 'สถานะ',
+  'แพ็คได้', 'ของหาย', 'ของหายคิดเป็น', 'เวลาแพ็ค', 'ผู้แพ็ค', 'ผู้บันทึก', 'หมายเหตุ'
 ];
 
 var STATUS_WAIT = 'รอแพ็ค';
 var STATUS_DONE = 'แพ็คแล้ว';
 
+/**
+ * รายการสินค้าตั้งต้น — [ชื่อ, ปริมาณต่อหน่วยขาย, หน่วยวัด, หน่วยขาย, หมวด]
+ * แก้ไข/เพิ่ม/ลบ ได้ที่ชีต "รายการสินค้า" โดยตรง (ไม่ต้องแก้โค้ด)
+ */
+var DEFAULT_ITEMS = [
+  // ---- เนื้อสัตว์ (ชั่งกรัม) ----
+  ['สันคอ',                30, U_GRAM,  'ถุง', 'เนื้อสัตว์'],
+  ['หมูสามชั้น',           30, U_GRAM,  'ถุง', 'เนื้อสัตว์'],
+  ['เนื้อแดง',             30, U_GRAM,  'ถุง', 'เนื้อสัตว์'],
+  // ---- ทะเล (ชั่งกรัม) ----
+  ['หมึก',                 35, U_GRAM,  'ถุง', 'ทะเล'],
+  ['ปลาดอลลี่',            35, U_GRAM,  'ถุง', 'ทะเล'],
+  ['ปลาหมึกกรอบ',          35, U_GRAM,  'ถุง', 'ทะเล'],
+  ['แมงกะพรุน',            35, U_GRAM,  'ถุง', 'ทะเล'],
+  // ---- ผัก (ชั่งกรัม) ----
+  ['ผักกาดขาว',           100, U_GRAM,  'ถุง', 'ผัก'],
+  ['กะหล่ำ',              100, U_GRAM,  'ถุง', 'ผัก'],
+  ['ผักบุ้ง',             100, U_GRAM,  'ถุง', 'ผัก'],
+  ['กวางตุ้ง',             50, U_GRAM,  'ถุง', 'ผัก'],
+  ['เห็ดเข็มทอง',          50, U_GRAM,  'ถุง', 'ผัก'],
+  ['เห็ดชิเมจิ',           50, U_GRAM,  'ถุง', 'ผัก'],
+  ['รากบัว',               50, U_GRAM,  'ถุง', 'ผัก'],
+  ['ข้าวโพด',              25, U_GRAM,  'ถุง', 'ผัก'],
+  ['สาหร่าย',               5, U_GRAM,  'ถุง', 'ผัก'],
+  // ---- เส้น/แป้ง (ชั่งกรัม) ----
+  ['เส้นมันเทศ',           55, U_GRAM,  'ถุง', 'เส้น/แป้ง'],
+  ['เส้นอุด้ง',            50, U_GRAM,  'ถุง', 'เส้น/แป้ง'],
+
+  // ---- เสียบไม้ (นับชิ้น) ----
+  ['ปูอัด',                 2, U_PIECE, 'ไม้', 'เสียบไม้'],
+  ['ต็อก',                  5, U_PIECE, 'ไม้', 'เสียบไม้'],
+  ['ไส้กรอกพันเบคอน',       3, U_PIECE, 'ไม้', 'เสียบไม้'],
+  // ---- แปรรูป (นับชิ้น) ----
+  ['เต้าหู้หลอด',           1, U_PIECE, 'ถุง', 'แปรรูป'],
+  ['ปูอัดชีส',              1, U_PIECE, 'ถุง', 'แปรรูป'],
+  ['ปูอัดยาว',              1, U_PIECE, 'ถุง', 'แปรรูป'],
+  ['เต้าหู้ปลาแผ่น',        1, U_PIECE, 'ถุง', 'แปรรูป'],
+  ['เต้าหู้ชีส',            2, U_PIECE, 'ถุง', 'แปรรูป'],
+  ['ชีสหลายสี',             2, U_PIECE, 'ถุง', 'แปรรูป'],
+  ['เต้าหู้หมู',            3, U_PIECE, 'ถุง', 'แปรรูป'],
+  ['ฟองเต้าหู้สามเหลี่ยม',  3, U_PIECE, 'ถุง', 'แปรรูป'],
+  ['ฟองเต้าหู้',            1, U_PIECE, 'ถุง', 'แปรรูป'],
+  ['ไส้กรอกหนังกรอบ',       1, U_PIECE, 'ถุง', 'แปรรูป'],
+  ['ไส้กรอกชมพู',           1, U_PIECE, 'ถุง', 'แปรรูป'],
+  ['ควิซ',                  1, U_PIECE, 'ถุง', 'แปรรูป'],
+  ['เห็ดออรินจิ',           1, U_PIECE, 'ถุง', 'ผัก'],
+  ['วุ้นเส้นหม่าล่า',       1, U_PIECE, 'ถุง', 'เส้น/แป้ง'],
+  ['มาม่า (ทุกชนิด)',       1, U_PIECE, 'ถุง', 'เส้น/แป้ง']
+];
+
 /* ===================== เมนูในชีต ===================== */
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('🌶️ ระบบสต็อก')
-    .addItem('1) ติดตั้งครั้งแรก (สร้างชีต + ตัวอย่าง)', 'setup')
+    .addItem('1) ติดตั้งครั้งแรก (สร้างชีต + รายการสินค้า)', 'setup')
     .addItem('อัปเดตหน้า "สรุป"', 'updateSummary')
     .addSeparator()
     .addItem('🧪 ทดสอบส่ง LINE ทุกสาขา', 'testLineAll')
@@ -55,13 +115,17 @@ function setup() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
   // ---- รายการสินค้า ----
-  var items = ensureSheet_(ss, SH.ITEMS, ['สินค้า', 'กรัมต่อถุง', 'หมวด', 'หมายเหตุ']);
+  var items = ensureSheet_(ss, SH.ITEMS, I_COLS);
   if (items.getLastRow() < 2) {
-    items.getRange(2, 1, 3, 4).setValues([
-      ['สันคอ',        30, 'เนื้อสัตว์', 'ตัวอย่าง — แก้ได้'],
-      ['หมูสามชั้น',   30, 'เนื้อสัตว์', ''],
-      ['ผักกาดขาว',    50, 'ผัก',        '']
-    ]);
+    var rows = DEFAULT_ITEMS.map(function (r) {
+      return [r[0], r[1], r[2], r[3], r[4], ''];
+    });
+    items.getRange(2, 1, rows.length, I_COLS.length).setValues(rows);
+    items.setColumnWidth(1, 190);
+    // ตัวเลือกหน่วยวัดแบบ dropdown กันพิมพ์ผิด
+    var rule = SpreadsheetApp.newDataValidation()
+      .requireValueInList([U_GRAM, U_PIECE], true).setAllowInvalid(false).build();
+    items.getRange(2, 3, Math.max(rows.length, 200), 1).setDataValidation(rule);
   }
 
   // ---- สาขา ----
@@ -71,30 +135,27 @@ function setup() {
       ['สาขา 1', '', true],
       ['สาขา 2', '', true]
     ]);
+    br.setColumnWidth(2, 320);
   }
 
-  // ---- บันทึกโอน ----
   ensureSheet_(ss, SH.TRANSFER, T_COLS);
-
-  // ---- รับเข้าครัวกลาง (ต้นทาง FIFO: ซัพพลายเออร์ → ครัวกลาง) ----
   ensureSheet_(ss, SH.STOCKIN, SI_COLS);
-
-  // ---- LINE IDs (ใช้เก็บ Group ID ที่จับได้จาก webhook) ----
   ensureSheet_(ss, SH.LINEIDS, ['เวลา', 'ประเภท', 'sourceId', 'ข้อความ/เหตุการณ์']);
 
-  // ---- สรุป (รายสินค้า + คงเหลือครัวกลาง) และ สรุปสาขา ----
-  ensureSheet_(ss, SH.SUMMARY, ['สินค้า', 'รับเข้า(กก.)', 'ส่งออก(กก.)', 'คงเหลือครัวกลาง(กก.)', 'ควรแพ็ครวม(ถุง)', 'แพ็คได้จริง(ถุง)', 'ของหาย(ถุง)', 'ของหาย(กรัม)', 'ของหาย %', 'จำนวนครั้ง']);
-  ensureSheet_(ss, SH.BRANCHSUM, ['สาขา', 'ส่งออก(กก.)', 'ควรแพ็ค(ถุง)', 'แพ็คได้(ถุง)', 'ของหาย(ถุง)', 'ของหาย(กรัม)', 'ของหาย %', 'จำนวนครั้ง']);
+  ensureSheet_(ss, SH.SUMMARY, ['สินค้า', 'หน่วยวัด', 'รับเข้า', 'ส่งออก', 'คงเหลือครัวกลาง',
+                                'หน่วยขาย', 'ควรแพ็ครวม', 'แพ็คได้จริง', 'ของหาย', 'ของหาย %', 'จำนวนครั้ง']);
+  ensureSheet_(ss, SH.BRANCHSUM, ['สาขา', 'ควรแพ็ค', 'แพ็คได้', 'ของหาย', 'ของหาย %', 'จำนวนครั้ง']);
 
   updateSummary();
 
   SpreadsheetApp.getUi().alert(
     'ติดตั้งเรียบร้อย ✅\n\n' +
-    'ขั้นต่อไป (ดูละเอียดในไฟล์ SETUP.md):\n' +
-    '1. Deploy > New deployment > Web app (Execute as: me, Access: Anyone)\n' +
-    '2. เอา URL ที่ได้ ไปตั้งเป็น Webhook ของ LINE Messaging API\n' +
-    '3. ใส่ Channel access token ที่เมนู Project Settings > Script Properties (คีย์ LINE_TOKEN)\n' +
-    '4. ดึงบอทเข้ากลุ่มไลน์สาขา แล้วพิมพ์ "id" ในกลุ่ม เพื่อรับ Group ID มาใส่ชีต "สาขา"'
+    'ใส่รายการสินค้าให้แล้ว ' + DEFAULT_ITEMS.length + ' รายการ (แก้ไข/เพิ่ม/ลบได้ที่ชีต "รายการสินค้า")\n\n' +
+    'ขั้นต่อไป (ดูละเอียดใน SETUP.md):\n' +
+    '1. ใส่ชื่อสาขา + LINE Group ID ที่ชีต "สาขา"\n' +
+    '2. ใส่ LINE token ที่ Project Settings > Script Properties (คีย์ LINE_TOKEN)\n' +
+    '3. Deploy > New deployment > Web app (Execute as: Me, Access: Anyone)\n' +
+    '4. ทดสอบด้วยเมนู "🧪 ทดสอบส่ง LINE ทุกสาขา"'
   );
 }
 
@@ -102,10 +163,10 @@ function ensureSheet_(ss, name, headers) {
   var sh = ss.getSheetByName(name);
   if (!sh) sh = ss.insertSheet(name);
   var cur = sh.getRange(1, 1, 1, Math.max(headers.length, sh.getLastColumn() || 1)).getValues()[0];
-  var needHeader = !cur[0];
-  if (needHeader) {
+  if (!cur[0]) {
     sh.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sh.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#c0392b').setFontColor('#ffffff');
+    sh.getRange(1, 1, 1, headers.length).setFontWeight('bold')
+      .setBackground('#c0392b').setFontColor('#ffffff');
     sh.setFrozenRows(1);
   }
   return sh;
@@ -135,39 +196,28 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-function getWebAppUrl_() {
-  return ScriptApp.getService().getUrl();
-}
+function getWebAppUrl_() { return ScriptApp.getService().getUrl(); }
 
 function showWebAppUrl() {
   var url = getWebAppUrl_();
   SpreadsheetApp.getUi().alert(
-    url ? ('ลิงก์เว็บแอป:\n\n' + url + '\n\n(เปิดลิงก์นี้เพื่อกรอกของออกจากครัวกลาง)')
-        : 'ยังไม่ได้ Deploy เป็น Web app — ไปที่ Deploy > New deployment ก่อน'
+    url ? ('ลิงก์เว็บแอป:\n\n' + url) : 'ยังไม่ได้ Deploy เป็น Web app — ไปที่ Deploy > New deployment ก่อน'
   );
 }
 
 /* ===================== API ที่หน้าเว็บเรียก ===================== */
 
-/** ข้อมูลตั้งต้นสำหรับหน้ากรอกของออก */
 function getEntryData() {
-  var bal = centralBalance_();
-  var balances = {};
-  Object.keys(bal).forEach(function (k) { balances[k] = bal[k].balG; });
   return {
-    items: getItems_(),        // [{name, gramsPerBag, category}]
-    branches: getBranches_(),  // [{name, groupId, active}]
-    balances: balances,        // { สินค้า: กรัมคงเหลือที่ครัวกลาง }
+    items: getItems_(),
+    branches: getBranches_(),
+    balances: balanceMap_(),
     webAppUrl: getWebAppUrl_()
   };
 }
 
-/** ข้อมูลตั้งต้นสำหรับหน้ารับเข้าครัวกลาง */
 function getStockInData() {
-  var bal = centralBalance_();
-  var balances = {};
-  Object.keys(bal).forEach(function (k) { balances[k] = bal[k].balG; });
-  return { items: getItems_(), balances: balances, webAppUrl: getWebAppUrl_() };
+  return { items: getItems_(), balances: balanceMap_(), webAppUrl: getWebAppUrl_() };
 }
 
 /** ครัวกลางรับของเข้าจากซัพพลายเออร์ */
@@ -175,51 +225,19 @@ function submitStockIn(payload) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    var item = String(payload.item || '').trim();
-    if (!item) throw new Error('กรุณาเลือกสินค้า');
-    var grams = toGrams_(payload.weight, payload.unit);
-    if (!(grams > 0)) throw new Error('กรุณากรอกน้ำหนักให้ถูกต้อง');
+    var it = mustFindItem_(payload.item);
+    var qty = toBase_(payload.qty, payload.inputUnit, it.measureUnit);
+    if (!(qty > 0)) throw new Error('กรุณากรอกจำนวนให้ถูกต้อง');
 
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.STOCKIN);
     var now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
-    var entered = String(payload.weight) + ' ' + (payload.unit || '');
-    sh.appendRow([now, item, grams, entered, String(payload.supplier || ''),
-                  String(payload.staff || ''), String(payload.note || '')]);
+    sh.appendRow([now, it.name, qty, it.measureUnit, enteredText_(payload.qty, payload.inputUnit),
+                  String(payload.supplier || ''), String(payload.staff || ''), String(payload.note || '')]);
 
     updateSummary();
-    var b = centralBalance_()[item];
-    return { ok: true, grams: grams, balanceG: b ? b.balG : grams };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-/** คงเหลือที่ครัวกลาง = รับเข้า − ส่งออก (แยกตามสินค้า, หน่วยกรัม) */
-function centralBalance_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var res = {};
-
-  var si = ss.getSheetByName(SH.STOCKIN);
-  if (si && si.getLastRow() >= 2) {
-    var v = si.getRange(2, 1, si.getLastRow() - 1, 3).getValues(); // วันที่, สินค้า, กรัม
-    v.forEach(function (r) {
-      var it = r[1]; if (!it) return;
-      (res[it] = res[it] || { inG: 0, outG: 0 }).inG += Number(r[2]) || 0;
-    });
-  }
-
-  var tr = ss.getSheetByName(SH.TRANSFER);
-  if (tr && tr.getLastRow() >= 2) {
-    var idx = {}; T_COLS.forEach(function (c, j) { idx[c] = j; });
-    var t = tr.getRange(2, 1, tr.getLastRow() - 1, T_COLS.length).getValues();
-    t.forEach(function (r) {
-      var it = r[idx['สินค้า']]; if (!it) return;
-      (res[it] = res[it] || { inG: 0, outG: 0 }).outG += Number(r[idx['น้ำหนักเข้า(กรัม)']]) || 0;
-    });
-  }
-
-  Object.keys(res).forEach(function (k) { res[k].balG = res[k].inG - res[k].outG; });
-  return res;
+    var b = centralBalance_()[it.name];
+    return { ok: true, qty: qty, balance: b ? b.bal : qty, measureUnit: it.measureUnit };
+  } finally { lock.releaseLock(); }
 }
 
 /** ครัวกลางกรอกของออกไปสาขา */
@@ -227,52 +245,44 @@ function submitTransfer(payload) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sh = ss.getSheetByName(SH.TRANSFER);
-
-    var item = String(payload.item || '').trim();
     var branch = String(payload.branch || '').trim();
-    if (!item) throw new Error('กรุณาเลือกสินค้า');
     if (!branch) throw new Error('กรุณาเลือกสาขา');
+    var it = mustFindItem_(payload.item);
 
-    var grams = toGrams_(payload.weight, payload.unit);
-    if (!(grams > 0)) throw new Error('กรุณากรอกน้ำหนักให้ถูกต้อง');
+    var qty = toBase_(payload.qty, payload.inputUnit, it.measureUnit);
+    if (!(qty > 0)) throw new Error('กรุณากรอกจำนวนให้ถูกต้อง');
 
-    var gpb = gramsPerBag_(item);            // กรัมต่อถุงจากชีต "รายการสินค้า"
-    var expectedBags = gpb > 0 ? Math.floor(grams / gpb) : '';
+    var expected = it.perUnit > 0 ? Math.floor(qty / it.perUnit) : '';
 
     var now = new Date();
     var id = 'TF' + Utilities.formatDate(now, TZ, 'yyMMddHHmmss') +
              '-' + Math.floor(Math.random() * 900 + 100);
-    var dateStr = Utilities.formatDate(now, TZ, 'yyyy-MM-dd');
-    var timeStr = Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm');
-    var entered = String(payload.weight) + ' ' + (payload.unit || '');
+    var entered = enteredText_(payload.qty, payload.inputUnit);
 
-    var row = objToTransferRow_({
-      'รหัส': id, 'วันที่': dateStr, 'เวลาบันทึก': timeStr, 'สินค้า': item,
-      'น้ำหนักเข้า(กรัม)': grams, 'ที่กรอก': entered, 'จาก': CENTRAL_NAME,
-      'ไปสาขา': branch, 'กรัมต่อถุง': gpb || '', 'ควรแพ็ค(ถุง)': expectedBags,
-      'สถานะ': STATUS_WAIT, 'ผู้บันทึก': String(payload.staff || '')
-    });
-    sh.appendRow(row);
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.TRANSFER);
+    sh.appendRow(objToRow_(T_COLS, {
+      'รหัส': id,
+      'วันที่': Utilities.formatDate(now, TZ, 'yyyy-MM-dd'),
+      'เวลาบันทึก': Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm'),
+      'สินค้า': it.name, 'ปริมาณเข้า': qty, 'หน่วยวัด': it.measureUnit, 'ที่กรอก': entered,
+      'จาก': CENTRAL_NAME, 'ไปสาขา': branch,
+      'ปริมาณต่อหน่วย': it.perUnit || '', 'หน่วยขาย': it.sellUnit,
+      'ควรแพ็ค': expected, 'สถานะ': STATUS_WAIT,
+      'ผู้บันทึก': String(payload.staff || '')
+    }));
 
-    // ---- แจ้งเตือน LINE เข้ากลุ่มสาขา ----
-    var lineResult = notifyBranchNewTransfer_(branch, {
-      id: id, item: item, entered: entered, grams: grams,
-      gpb: gpb, expectedBags: expectedBags
+    var line = notifyBranchNewTransfer_(branch, {
+      id: id, item: it, entered: entered, qty: qty, expected: expected
     });
 
     updateSummary();
     return {
-      ok: true, id: id, expectedBags: expectedBags, gpb: gpb, grams: grams,
-      lineSent: lineResult.sent, lineMsg: lineResult.msg
+      ok: true, id: id, expected: expected, sellUnit: it.sellUnit,
+      lineSent: line.sent, lineMsg: line.msg
     };
-  } finally {
-    lock.releaseLock();
-  }
+  } finally { lock.releaseLock(); }
 }
 
-/** ดึงรายละเอียดรายการโอน (ใช้ในหน้าแพ็ค) */
 function getTransfer(id) {
   var found = findTransfer_(id);
   if (!found) throw new Error('ไม่พบรายการนี้ (id: ' + id + ')');
@@ -284,79 +294,81 @@ function submitPack(payload) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    var id = String(payload.id || '').trim();
-    var found = findTransfer_(id);
+    var found = findTransfer_(String(payload.id || '').trim());
     if (!found) throw new Error('ไม่พบรายการนี้');
-
-    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.TRANSFER);
     var o = found.obj;
 
-    var packedBags = Number(payload.packedBags);
-    if (!(packedBags >= 0)) throw new Error('กรุณากรอกจำนวนถุงที่แพ็คได้');
+    var packed = Number(payload.packed);
+    if (!(packed >= 0)) throw new Error('กรุณากรอกจำนวนที่แพ็คได้');
 
-    var gpb = Number(o['กรัมต่อถุง']) || 0;
-    var expectedBags = Number(o['ควรแพ็ค(ถุง)']) || 0;
-    var packedWeight = payload.packedWeight !== '' && payload.packedWeight != null
-      ? Number(payload.packedWeight) : (gpb ? packedBags * gpb : '');
+    var perUnit = Number(o['ปริมาณต่อหน่วย']) || 0;
+    var expected = Number(o['ควรแพ็ค']) || 0;
+    var loss = o['ควรแพ็ค'] === '' ? '' : (expected - packed);
+    var lossAmt = (loss !== '' && perUnit) ? loss * perUnit : '';
 
-    var lossBags = expectedBags ? (expectedBags - packedBags) : '';
-    var lossGrams = (lossBags !== '' && gpb) ? lossBags * gpb : '';
-
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.TRANSFER);
     var now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+    setCell_(sh, T_COLS, found.rowIndex, 'สถานะ', STATUS_DONE);
+    setCell_(sh, T_COLS, found.rowIndex, 'แพ็คได้', packed);
+    setCell_(sh, T_COLS, found.rowIndex, 'ของหาย', loss);
+    setCell_(sh, T_COLS, found.rowIndex, 'ของหายคิดเป็น',
+             lossAmt === '' ? '' : (lossAmt + ' ' + o['หน่วยวัด']));
+    setCell_(sh, T_COLS, found.rowIndex, 'เวลาแพ็ค', now);
+    setCell_(sh, T_COLS, found.rowIndex, 'ผู้แพ็ค', String(payload.packer || ''));
+    if (payload.note) setCell_(sh, T_COLS, found.rowIndex, 'หมายเหตุ', String(payload.note));
 
-    setTransferCell_(sh, found.rowIndex, 'สถานะ', STATUS_DONE);
-    setTransferCell_(sh, found.rowIndex, 'แพ็คได้(ถุง)', packedBags);
-    setTransferCell_(sh, found.rowIndex, 'น้ำหนักที่แพ็ค(กรัม)', packedWeight);
-    setTransferCell_(sh, found.rowIndex, 'ของหาย(ถุง)', lossBags);
-    setTransferCell_(sh, found.rowIndex, 'ของหาย(กรัม)', lossGrams);
-    setTransferCell_(sh, found.rowIndex, 'เวลาแพ็ค', now);
-    setTransferCell_(sh, found.rowIndex, 'ผู้แพ็ค', String(payload.packer || ''));
-    if (payload.note) setTransferCell_(sh, found.rowIndex, 'หมายเหตุ', String(payload.note));
-
-    // ยืนยันกลับเข้ากลุ่มสาขา
     notifyBranchPacked_(o['ไปสาขา'], {
-      item: o['สินค้า'], entered: o['ที่กรอก'], expectedBags: expectedBags,
-      packedBags: packedBags, lossBags: lossBags, lossGrams: lossGrams,
-      packer: String(payload.packer || '')
+      item: o['สินค้า'], entered: o['ที่กรอก'], sellUnit: o['หน่วยขาย'],
+      measureUnit: o['หน่วยวัด'], expected: expected, packed: packed,
+      loss: loss, lossAmt: lossAmt, packer: String(payload.packer || '')
     });
 
     updateSummary();
-    return {
-      ok: true, item: o['สินค้า'], expectedBags: expectedBags,
-      packedBags: packedBags, lossBags: lossBags, lossGrams: lossGrams
-    };
-  } finally {
-    lock.releaseLock();
-  }
+    return { ok: true, expected: expected, packed: packed, loss: loss, lossAmt: lossAmt };
+  } finally { lock.releaseLock(); }
 }
 
-/** ข้อมูลสรุปสำหรับหน้า Index */
 function getDashboard() {
   var agg = aggregate_();
   var bal = centralBalance_();
   var central = Object.keys(bal).map(function (k) {
-    return { item: k, inG: bal[k].inG, outG: bal[k].outG, balG: bal[k].balG };
+    return { item: k, unit: bal[k].unit, inQty: bal[k].inQty, outQty: bal[k].outQty, bal: bal[k].bal };
   });
-  central.sort(function (a, b) { return b.balG - a.balG; });
+  central.sort(function (a, b) { return b.bal - a.bal; });
   return {
-    perItem: agg.perItem,
-    perBranch: agg.perBranch,
-    perDay: agg.perDay.slice(0, 14),
-    central: central,
-    totals: agg.totals,
-    recent: getRecentTransfers_(15),
-    webAppUrl: getWebAppUrl_()
+    perItem: agg.perItem, perBranch: agg.perBranch, perDay: agg.perDay.slice(0, 14),
+    central: central, totals: agg.totals,
+    recent: getRecentTransfers_(15), webAppUrl: getWebAppUrl_()
   };
 }
 
-/* ===================== ตัวช่วยอ่านชีต ===================== */
+/* ===================== ตัวช่วย ===================== */
 function getItems_() {
   var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.ITEMS);
   if (!sh || sh.getLastRow() < 2) return [];
-  var v = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+  var v = sh.getRange(2, 1, sh.getLastRow() - 1, I_COLS.length).getValues();
   return v.filter(function (r) { return r[0]; }).map(function (r) {
-    return { name: String(r[0]).trim(), gramsPerBag: Number(r[1]) || 0, category: String(r[2] || '') };
+    var mu = String(r[2] || '').trim() === U_PIECE ? U_PIECE : U_GRAM;
+    return {
+      name: String(r[0]).trim(),
+      perUnit: Number(r[1]) || 0,
+      measureUnit: mu,
+      sellUnit: String(r[3] || '').trim() || 'ถุง',
+      category: String(r[4] || '')
+    };
   });
+}
+
+function findItem_(name) {
+  var items = getItems_();
+  for (var i = 0; i < items.length; i++) if (items[i].name === name) return items[i];
+  return null;
+}
+
+function mustFindItem_(name) {
+  var it = findItem_(String(name || '').trim());
+  if (!it) throw new Error('ไม่พบสินค้านี้ในชีต "รายการสินค้า"');
+  return it;
 }
 
 function getBranches_() {
@@ -368,34 +380,38 @@ function getBranches_() {
   });
 }
 
-function gramsPerBag_(itemName) {
-  var items = getItems_();
-  for (var i = 0; i < items.length; i++) {
-    if (items[i].name === itemName) return items[i].gramsPerBag;
-  }
-  return 0;
-}
-
-function branchGroupId_(branchName) {
-  var brs = getBranches_();
-  for (var i = 0; i < brs.length; i++) {
-    if (brs[i].name === branchName) return brs[i].groupId;
-  }
+function branchGroupId_(name) {
+  var b = getBranches_();
+  for (var i = 0; i < b.length; i++) if (b[i].name === name) return b[i].groupId;
   return '';
 }
 
-function toGrams_(weight, unit) {
-  var w = Number(weight);
-  if (!(w > 0)) return 0;
-  unit = String(unit || '').trim();
-  if (unit === 'กรัม' || unit === 'g' || unit === 'กก.รวมเศษ') return w;
-  // ค่าเริ่มต้นถือเป็นกิโล
-  return Math.round(w * 1000);
+/** แปลงค่าที่กรอก → หน่วยฐานของสินค้า (กรัม หรือ ชิ้น) */
+function toBase_(qty, inputUnit, measureUnit) {
+  var n = Number(qty);
+  if (!(n > 0)) return 0;
+  if (measureUnit === U_PIECE) return Math.round(n);          // นับชิ้น
+  return String(inputUnit) === U_GRAM ? n : Math.round(n * 1000); // ค่าเริ่มต้น = กิโล
 }
 
-/* ---- แปลง object <-> แถวของชีต "บันทึกโอน" ---- */
-function objToTransferRow_(obj) {
-  return T_COLS.map(function (c) { return obj.hasOwnProperty(c) ? obj[c] : ''; });
+function enteredText_(qty, inputUnit) {
+  return String(qty) + ' ' + String(inputUnit || '');
+}
+
+/** แสดงปริมาณให้อ่านง่าย: กรัม→กก. เมื่อ >=1000, ชิ้น→ชิ้น */
+function fmtQty_(qty, measureUnit) {
+  qty = Number(qty) || 0;
+  if (measureUnit === U_PIECE) return qty + ' ' + U_PIECE;
+  return qty >= 1000 ? (round_(qty / 1000, 2) + ' กก.') : (qty + ' ก.');
+}
+
+function objToRow_(cols, obj) {
+  return cols.map(function (c) { return obj.hasOwnProperty(c) ? obj[c] : ''; });
+}
+
+function setCell_(sh, cols, rowIndex, colName, value) {
+  var col = cols.indexOf(colName) + 1;
+  if (col > 0) sh.getRange(rowIndex, col).setValue(value);
 }
 
 function findTransfer_(id) {
@@ -415,70 +431,108 @@ function findTransfer_(id) {
   return null;
 }
 
-function setTransferCell_(sh, rowIndex, colName, value) {
-  var col = T_COLS.indexOf(colName) + 1;
-  if (col > 0) sh.getRange(rowIndex, col).setValue(value);
-}
-
 function getRecentTransfers_(n) {
   var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.TRANSFER);
   if (!sh || sh.getLastRow() < 2) return [];
   var last = sh.getLastRow();
   var count = Math.min(n, last - 1);
   var vals = sh.getRange(last - count + 1, 1, count, T_COLS.length).getValues();
-  var out = vals.map(function (r) {
+  return vals.map(function (r) {
     var o = {}; T_COLS.forEach(function (c, j) { o[c] = r[j]; }); return o;
-  });
-  return out.reverse();
+  }).reverse();
 }
 
-/* ===================== สรุป / FIFO ===================== */
-function aggregate_() {
-  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.TRANSFER);
-  var perItem = {}, perBranch = {}, perDay = {};
-  var totals = { outG: 0, expBags: 0, packedBags: 0, lossBags: 0, lossG: 0, n: 0 };
-
-  function bucket(map, key, extra) {
-    return map[key] || (map[key] = Object.assign(
-      { outG: 0, expBags: 0, packedBags: 0, lossBags: 0, lossG: 0, n: 0 }, extra));
+/* ===================== คงเหลือ / สรุป ===================== */
+/** คงเหลือที่ครัวกลาง = รับเข้า − ส่งออก (แยกตามสินค้า, หน่วยฐานของสินค้านั้น) */
+function centralBalance_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var res = {};
+  function slot(item, unit) {
+    if (!res[item]) res[item] = { inQty: 0, outQty: 0, bal: 0, unit: unit || U_GRAM };
+    if (unit) res[item].unit = unit;
+    return res[item];
   }
 
-  if (sh && sh.getLastRow() >= 2) {
-    var v = sh.getRange(2, 1, sh.getLastRow() - 1, T_COLS.length).getValues();
-    var idx = {};
-    T_COLS.forEach(function (c, j) { idx[c] = j; });
+  var si = ss.getSheetByName(SH.STOCKIN);
+  if (si && si.getLastRow() >= 2) {
+    var v = si.getRange(2, 1, si.getLastRow() - 1, SI_COLS.length).getValues();
     v.forEach(function (r) {
-      var item = r[idx['สินค้า']];
-      if (!item) return;
-      var branch = r[idx['ไปสาขา']] || '(ไม่ระบุ)';
-      var day = r[idx['วันที่']] || '';
-      var g = Number(r[idx['น้ำหนักเข้า(กรัม)']]) || 0;
-      var exp = Number(r[idx['ควรแพ็ค(ถุง)']]) || 0;
-      var done = r[idx['สถานะ']] === STATUS_DONE;
-      var pk = done ? (Number(r[idx['แพ็คได้(ถุง)']]) || 0) : 0;
-      var lb = done ? (Number(r[idx['ของหาย(ถุง)']]) || 0) : 0;
-      var lg = done ? (Number(r[idx['ของหาย(กรัม)']]) || 0) : 0;
-
-      [bucket(perItem, item, { item: item }),
-       bucket(perBranch, branch, { branch: branch }),
-       bucket(perDay, day, { day: day }),
-       totals].forEach(function (o) {
-        o.outG += g; o.expBags += exp; o.n++;
-        o.packedBags += pk; o.lossBags += lb; o.lossG += lg;
-      });
+      if (!r[1]) return;
+      slot(r[1], r[3]).inQty += Number(r[2]) || 0;
     });
   }
 
-  var itemArr = Object.keys(perItem).map(function (k) { return perItem[k]; });
-  itemArr.sort(function (a, b) { return b.outG - a.outG; });
-  var branchArr = Object.keys(perBranch).map(function (k) { return perBranch[k]; });
-  branchArr.sort(function (a, b) { return b.outG - a.outG; });
+  var tr = ss.getSheetByName(SH.TRANSFER);
+  if (tr && tr.getLastRow() >= 2) {
+    var idx = {}; T_COLS.forEach(function (c, j) { idx[c] = j; });
+    var t = tr.getRange(2, 1, tr.getLastRow() - 1, T_COLS.length).getValues();
+    t.forEach(function (r) {
+      var it = r[idx['สินค้า']]; if (!it) return;
+      slot(it, r[idx['หน่วยวัด']]).outQty += Number(r[idx['ปริมาณเข้า']]) || 0;
+    });
+  }
+
+  Object.keys(res).forEach(function (k) { res[k].bal = res[k].inQty - res[k].outQty; });
+  return res;
+}
+
+function balanceMap_() {
+  var b = centralBalance_(), out = {};
+  Object.keys(b).forEach(function (k) { out[k] = b[k].bal; });
+  return out;
+}
+
+function aggregate_() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.TRANSFER);
+  var perItem = {}, perBranch = {}, perDay = {};
+  // หมายเหตุ: ปริมาณเข้าคนละหน่วย (กรัม/ชิ้น) จึงรวมข้ามสินค้าไม่ได้
+  // ยอดรวมจึงนับเฉพาะ ควรแพ็ค/แพ็คได้/ของหาย ซึ่งเป็นจำนวนหน่วยขาย (ถุง/ไม้)
+  var totals = { expected: 0, packed: 0, loss: 0, n: 0, outG: 0 };
+
+  function bucket(map, key, extra) {
+    if (!map[key]) {
+      map[key] = { expected: 0, packed: 0, loss: 0, n: 0, outQty: 0 };
+      Object.keys(extra || {}).forEach(function (k) { map[key][k] = extra[k]; });
+    }
+    return map[key];
+  }
+
+  if (sh && sh.getLastRow() >= 2) {
+    var idx = {}; T_COLS.forEach(function (c, j) { idx[c] = j; });
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, T_COLS.length).getValues();
+    v.forEach(function (r) {
+      var item = r[idx['สินค้า']]; if (!item) return;
+      var branch = r[idx['ไปสาขา']] || '(ไม่ระบุ)';
+      var day = r[idx['วันที่']] || '';
+      var mu = r[idx['หน่วยวัด']] || U_GRAM;
+      var q = Number(r[idx['ปริมาณเข้า']]) || 0;
+      var exp = Number(r[idx['ควรแพ็ค']]) || 0;
+      var done = r[idx['สถานะ']] === STATUS_DONE;
+      var pk = done ? (Number(r[idx['แพ็คได้']]) || 0) : 0;
+      var ls = done ? (Number(r[idx['ของหาย']]) || 0) : 0;
+
+      var bi = bucket(perItem, item, { item: item, unit: mu, sellUnit: r[idx['หน่วยขาย']] || 'ถุง' });
+      var bb = bucket(perBranch, branch, { branch: branch });
+      var bd = bucket(perDay, day, { day: day });
+      [bi, bb, bd].forEach(function (o) {
+        o.outQty += q; o.expected += exp; o.packed += pk; o.loss += ls; o.n++;
+      });
+      totals.expected += exp; totals.packed += pk; totals.loss += ls; totals.n++;
+      if (mu === U_GRAM) totals.outG += q;
+    });
+  }
+
+  function toArr(map, sortKey) {
+    var a = Object.keys(map).map(function (k) { return map[k]; });
+    a.sort(function (x, y) { return (y[sortKey] || 0) - (x[sortKey] || 0); });
+    return a;
+  }
   var dayArr = Object.keys(perDay).map(function (k) { return perDay[k]; });
-  dayArr.sort(function (a, b) { return String(b.day).localeCompare(String(a.day)); }); // ใหม่→เก่า
+  dayArr.sort(function (a, b) { return String(b.day).localeCompare(String(a.day)); });
 
   return {
-    perItem: itemArr, perItemMap: perItem,
-    perBranch: branchArr, perDay: dayArr, totals: totals
+    perItem: toArr(perItem, 'expected'), perItemMap: perItem,
+    perBranch: toArr(perBranch, 'expected'), perDay: dayArr, totals: totals
   };
 }
 
@@ -486,33 +540,36 @@ function updateSummary() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var agg = aggregate_();
   var bal = centralBalance_();
+  var items = getItems_();
+  var meta = {};
+  items.forEach(function (i) { meta[i.name] = i; });
 
-  // ---- สรุปรายสินค้า + คงเหลือครัวกลาง ----
-  var itemHeader = ['สินค้า', 'รับเข้า(กก.)', 'ส่งออก(กก.)', 'คงเหลือครัวกลาง(กก.)',
-                    'ควรแพ็ครวม(ถุง)', 'แพ็คได้จริง(ถุง)', 'ของหาย(ถุง)', 'ของหาย(กรัม)', 'ของหาย %', 'จำนวนครั้ง'];
   var names = {};
   agg.perItem.forEach(function (o) { names[o.item] = true; });
   Object.keys(bal).forEach(function (k) { names[k] = true; });
-  var itemRows = Object.keys(names).map(function (it) {
-    var o = agg.perItemMap[it] || { outG: 0, expBags: 0, packedBags: 0, lossBags: 0, lossG: 0, n: 0 };
-    var b = bal[it] || { inG: 0, outG: 0, balG: 0 };
-    var pct = o.expBags ? (o.lossBags / o.expBags * 100) : 0;
-    return [it, round_(b.inG / 1000, 2), round_(b.outG / 1000, 2), round_(b.balG / 1000, 2),
-            o.expBags, o.packedBags, o.lossBags, o.lossG, round_(pct, 1), o.n];
-  });
-  itemRows.sort(function (a, b) { return b[3] - a[3]; }); // เรียงตามคงเหลือ
-  writeSummarySheet_(ss, SH.SUMMARY, itemHeader, itemRows);
 
-  // ---- สรุปรายสาขา ----
-  var brHeader = ['สาขา', 'ส่งออก(กก.)', 'ควรแพ็ค(ถุง)', 'แพ็คได้(ถุง)', 'ของหาย(ถุง)', 'ของหาย(กรัม)', 'ของหาย %', 'จำนวนครั้ง'];
-  var brRows = agg.perBranch.map(function (o) {
-    var pct = o.expBags ? (o.lossBags / o.expBags * 100) : 0;
-    return [o.branch, round_(o.outG / 1000, 2), o.expBags, o.packedBags, o.lossBags, o.lossG, round_(pct, 1), o.n];
+  var rows = Object.keys(names).map(function (it) {
+    var o = agg.perItemMap[it] || { expected: 0, packed: 0, loss: 0, n: 0 };
+    var b = bal[it] || { inQty: 0, outQty: 0, bal: 0, unit: U_GRAM };
+    var m = meta[it] || {};
+    var pct = o.expected ? (o.loss / o.expected * 100) : 0;
+    return [it, b.unit, b.inQty, b.outQty, b.bal, m.sellUnit || 'ถุง',
+            o.expected, o.packed, o.loss, round_(pct, 1), o.n];
   });
-  writeSummarySheet_(ss, SH.BRANCHSUM, brHeader, brRows);
+  rows.sort(function (a, b) { return b[4] - a[4]; });
+  writeSheet_(ss, SH.SUMMARY,
+    ['สินค้า', 'หน่วยวัด', 'รับเข้า', 'ส่งออก', 'คงเหลือครัวกลาง', 'หน่วยขาย',
+     'ควรแพ็ครวม', 'แพ็คได้จริง', 'ของหาย', 'ของหาย %', 'จำนวนครั้ง'], rows);
+
+  var brRows = agg.perBranch.map(function (o) {
+    var pct = o.expected ? (o.loss / o.expected * 100) : 0;
+    return [o.branch, o.expected, o.packed, o.loss, round_(pct, 1), o.n];
+  });
+  writeSheet_(ss, SH.BRANCHSUM,
+    ['สาขา', 'ควรแพ็ค', 'แพ็คได้', 'ของหาย', 'ของหาย %', 'จำนวนครั้ง'], brRows);
 }
 
-function writeSummarySheet_(ss, name, header, rows) {
+function writeSheet_(ss, name, header, rows) {
   var sh = ss.getSheetByName(name) || ss.insertSheet(name);
   sh.clear();
   sh.getRange(1, 1, 1, header.length).setValues([header])
@@ -534,8 +591,7 @@ function linePush_(to, text) {
   if (!to) return { sent: false, msg: 'สาขานี้ยังไม่ได้ใส่ LINE Group ID' };
   try {
     var res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
-      method: 'post',
-      contentType: 'application/json',
+      method: 'post', contentType: 'application/json',
       headers: { 'Authorization': 'Bearer ' + token },
       muteHttpExceptions: true,
       payload: JSON.stringify({ to: to, messages: [{ type: 'text', text: text }] })
@@ -551,19 +607,14 @@ function lineReply_(replyToken, text) {
   var token = lineToken_();
   if (!token || !replyToken) return;
   UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply', {
-    method: 'post',
-    contentType: 'application/json',
+    method: 'post', contentType: 'application/json',
     headers: { 'Authorization': 'Bearer ' + token },
     muteHttpExceptions: true,
     payload: JSON.stringify({ replyToken: replyToken, messages: [{ type: 'text', text: text }] })
   });
 }
 
-/**
- * ทดสอบส่งข้อความเข้ากลุ่มไลน์ของทุกสาขา
- * ใช้เช็คว่า LINE_TOKEN และ Group ID ในชีต "สาขา" ถูกต้องไหม
- * (ปลอดภัยกับระบบแจ้งวันหมดอายุเดิม เพราะเป็นการ push อย่างเดียว ไม่ยุ่งกับ webhook)
- */
+/** ทดสอบส่งเข้ากลุ่มไลน์ทุกสาขา (push อย่างเดียว ไม่ยุ่งกับ webhook เดิม) */
 function testLineAll() {
   var ui = SpreadsheetApp.getUi();
   if (!lineToken_()) {
@@ -572,7 +623,6 @@ function testLineAll() {
   }
   var brs = getBranches_().filter(function (b) { return b.active; });
   if (!brs.length) { ui.alert('ยังไม่มีสาขาในชีต "สาขา"'); return; }
-
   var lines = [];
   brs.forEach(function (b) {
     if (!b.groupId) { lines.push('⚠️ ' + b.name + ' — ยังไม่ได้ใส่ Group ID'); return; }
@@ -583,68 +633,63 @@ function testLineAll() {
 }
 
 function notifyBranchNewTransfer_(branch, d) {
-  var url = getWebAppUrl_();
-  var link = url + '?page=pack&id=' + encodeURIComponent(d.id);
-  var kg = round_(d.grams / 1000, 2);
-  var expLine = d.expectedBags !== '' && d.expectedBags != null
-    ? ('📦 ควรแพ็คได้ ~' + d.expectedBags + ' ถุง (' + d.gpb + ' ก./ถุง)')
-    : '📦 (ยังไม่ได้ตั้งค่ากรัม/ถุงของสินค้านี้)';
+  var link = getWebAppUrl_() + '?page=pack&id=' + encodeURIComponent(d.id);
+  var it = d.item;
+  var expLine = (d.expected !== '' && d.expected != null)
+    ? ('📦 ควรแพ็คได้ ~' + d.expected + ' ' + it.sellUnit +
+       ' (' + it.perUnit + ' ' + it.measureUnit + '/' + it.sellUnit + ')')
+    : '📦 (ยังไม่ได้ตั้งค่าปริมาณต่อหน่วยของสินค้านี้)';
   var text =
     '🔔 มีของเข้า → ' + branch + '\n' +
-    '• ' + d.item + '  ' + d.entered + '  (' + kg + ' กก.)\n' +
+    '• ' + it.name + '  ' + d.entered + '  (' + fmtQty_(d.qty, it.measureUnit) + ')\n' +
     expLine + '\n\n' +
     '👉 แพ็คเสร็จแล้วกดกรอกที่นี่:\n' + link;
   return linePush_(branchGroupId_(branch), text);
 }
 
 function notifyBranchPacked_(branch, d) {
+  var u = d.sellUnit || 'ถุง';
   var lossTxt;
-  if (d.lossBags === '' || d.lossBags == null) {
+  if (d.loss === '' || d.loss == null) {
     lossTxt = '📊 บันทึกแล้ว';
-  } else if (d.lossBags > 0) {
-    lossTxt = '⚠️ ของหาย/ขาด ' + d.lossBags + ' ถุง' + (d.lossGrams ? (' (~' + d.lossGrams + ' ก.)') : '');
-  } else if (d.lossBags < 0) {
-    lossTxt = '✅ แพ็คได้เกินคาด ' + Math.abs(d.lossBags) + ' ถุง';
+  } else if (d.loss > 0) {
+    lossTxt = '⚠️ ของหาย/ขาด ' + d.loss + ' ' + u +
+              (d.lossAmt ? (' (~' + d.lossAmt + ' ' + d.measureUnit + ')') : '');
+  } else if (d.loss < 0) {
+    lossTxt = '✅ แพ็คได้เกินคาด ' + Math.abs(d.loss) + ' ' + u;
   } else {
     lossTxt = '✅ ครบพอดี ไม่มีของหาย';
   }
   var text =
     '✅ แพ็คเสร็จ: ' + d.item + ' (' + d.entered + ')\n' +
-    '• ควรได้ ' + d.expectedBags + ' ถุง / แพ็คจริง ' + d.packedBags + ' ถุง\n' +
+    '• ควรได้ ' + d.expected + ' ' + u + ' / แพ็คจริง ' + d.packed + ' ' + u + '\n' +
     lossTxt + (d.packer ? ('\n• โดย ' + d.packer) : '');
   return linePush_(branchGroupId_(branch), text);
 }
 
 /* ===================== LINE webhook (doPost) ===================== */
 /**
- * ตั้ง URL /exec เป็น Webhook ของ LINE Messaging API
- * - จับ Group ID ให้อัตโนมัติ: พิมพ์ "id" ในกลุ่ม บอทจะตอบ Group ID กลับมา
- * - ตอนดึงบอทเข้ากลุ่ม (join) ก็จะตอบ Group ID เช่นกัน
+ * ไม่จำเป็นต้องตั้งค่า — ถ้าไม่ตั้ง Webhook URL ฟังก์ชันนี้จะไม่ถูกเรียกเลย
+ * (ใช้เฉพาะกรณีอยากให้ระบบจับ Group ID ให้อัตโนมัติ: พิมพ์ "id" ในกลุ่ม)
  */
 function doPost(e) {
   try {
-    var body = JSON.parse(e.postData.contents);
-    var events = body.events || [];
+    var events = (JSON.parse(e.postData.contents).events) || [];
     events.forEach(function (ev) {
       var src = ev.source || {};
       var sid = src.groupId || src.roomId || src.userId || '';
-      var type = src.type || '';
-      var replyToken = ev.replyToken;
-
       if (ev.type === 'join') {
-        logLineId_(type, sid, 'บอทเข้ากลุ่ม');
-        lineReply_(replyToken, '👋 พร้อมใช้งาน!\nGroup ID นี้คือ:\n' + sid + '\n\nนำไปวางในชีต "สาขา" คอลัมน์ LINE Group ID');
+        logLineId_(src.type, sid, 'บอทเข้ากลุ่ม');
+        lineReply_(ev.replyToken, '👋 พร้อมใช้งาน!\nGroup ID นี้คือ:\n' + sid + '\n\nนำไปวางในชีต "สาขา"');
       } else if (ev.type === 'message' && ev.message && ev.message.type === 'text') {
         var txt = String(ev.message.text || '').trim().toLowerCase();
         if (txt === 'id' || txt === 'groupid' || txt === 'ไอดี') {
-          logLineId_(type, sid, 'ขอ id');
-          lineReply_(replyToken, 'Group ID:\n' + sid + '\n\nนำไปวางในชีต "สาขา" คอลัมน์ LINE Group ID');
+          logLineId_(src.type, sid, 'ขอ id');
+          lineReply_(ev.replyToken, 'Group ID:\n' + sid + '\n\nนำไปวางในชีต "สาขา"');
         }
       }
     });
-  } catch (err) {
-    // ไม่ต้องทำอะไร — ต้องตอบ 200 เสมอเพื่อไม่ให้ LINE retry รัว
-  }
+  } catch (err) { /* ตอบ 200 เสมอ ไม่ให้ LINE retry รัว */ }
   return ContentService.createTextOutput(JSON.stringify({ ok: true }))
     .setMimeType(ContentService.MimeType.JSON);
 }
@@ -652,7 +697,8 @@ function doPost(e) {
 function logLineId_(type, sid, note) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sh = ss.getSheetByName(SH.LINEIDS) || ensureSheet_(ss, SH.LINEIDS, ['เวลา', 'ประเภท', 'sourceId', 'ข้อความ/เหตุการณ์']);
+    var sh = ss.getSheetByName(SH.LINEIDS) ||
+             ensureSheet_(ss, SH.LINEIDS, ['เวลา', 'ประเภท', 'sourceId', 'ข้อความ/เหตุการณ์']);
     sh.appendRow([Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'), type, sid, note]);
   } catch (err) {}
 }
