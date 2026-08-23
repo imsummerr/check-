@@ -2,6 +2,7 @@
 <html lang="th">
 <head><base target="_top"><?!= include('Style'); ?></head>
 <body>
+<?!= include('Auth'); ?>
 <header>
   <div class="wrap" style="padding:0">
     <h1>📦 สาขา — กรอกจำนวนที่แพ็คได้</h1>
@@ -10,6 +11,7 @@
 </header>
 
 <div class="wrap">
+  <div id="authBar" style="display:none; align-items:center; gap:8px; font-size:13px; padding:10px 14px; background:var(--card); border-radius:10px; margin-bottom:14px; box-shadow:var(--shadow)"></div>
   <div id="loading" class="card center muted">กำลังโหลด...</div>
 
   <div id="content" style="display:none">
@@ -33,9 +35,6 @@
         <div class="callout" id="lossBox" style="display:none">
           <div id="lossText"></div>
         </div>
-
-        <label for="packer">ผู้แพ็ค</label>
-        <input id="packer" placeholder="ชื่อพนักงานสาขา">
 
         <label for="note">หมายเหตุ</label>
         <input id="note" placeholder="เช่น มีชิ้นเสีย 1 ชิ้น">
@@ -114,9 +113,15 @@ function fill(){
   if(T['สถานะ']==='แพ็คแล้ว') showDone();
 }
 
-google.script.run.withSuccessHandler(function(t){ T=t; fill(); })
-  .withFailureHandler(function(e){ document.getElementById('loading').textContent='โหลดไม่ได้: '+e.message; })
-  .getTransfer(ID);
+function loadTransfer(){
+  google.script.run.withSuccessHandler(function(t){ T=t; fill(); })
+    .withFailureHandler(function(e){
+      if(authExpired(e)) return;
+      document.getElementById('loading').textContent='โหลดไม่ได้: '+e.message;
+    })
+    .getTransfer(AUTH.token, ID);
+}
+authInit(function(u){ authBar(u); loadTransfer(); });
 
 document.getElementById('packed').addEventListener('input', recalcLoss);
 
@@ -126,17 +131,16 @@ document.getElementById('f').addEventListener('submit', function(e){
   if(!(packed>=0)){ toast('กรุณากรอกจำนวนที่แพ็คได้'); return; }
   var btn=document.getElementById('submitBtn');
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> กำลังบันทึก...';
-  var payload={ id:ID, packed:packed,
-    packer:document.getElementById('packer').value.trim(),
+  var payload={ token:AUTH.token, id:ID, packed:packed,
     note:document.getElementById('note').value.trim() };
   google.script.run.withSuccessHandler(function(res){
     T['สถานะ']='แพ็คแล้ว'; T['แพ็คได้']=res.packed; T['ของหาย']=res.loss;
     T['ของหายคิดเป็น']=res.lossAmt===''?'':(res.lossAmt+' '+measureUnit());
-    T['ผู้แพ็ค']=payload.packer;
+    T['ผู้แพ็ค']=(AUTH.user&&AUTH.user.name)||'';
     toast('บันทึกเรียบร้อย ✅'); showDone();
   }).withFailureHandler(function(err){
     btn.disabled=false; btn.textContent='บันทึกจำนวนที่แพ็คได้';
-    toast('ผิดพลาด: '+err.message, 5000);
+    if(!authExpired(err)) toast('ผิดพลาด: '+err.message, 5000);
   }).submitPack(payload);
 });
 </script>

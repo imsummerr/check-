@@ -2,6 +2,7 @@
 <html lang="th">
 <head><base target="_top"><?!= include('Style'); ?></head>
 <body>
+<?!= include('Auth'); ?>
 <header>
   <div class="wrap" style="padding:0">
     <h1>📤 ครัวกลาง — ส่งของไปสาขา</h1>
@@ -10,6 +11,7 @@
 </header>
 
 <div class="wrap">
+  <div id="authBar" style="display:none; align-items:center; gap:8px; font-size:13px; padding:10px 14px; background:var(--card); border-radius:10px; margin-bottom:14px; box-shadow:var(--shadow)"></div>
   <div class="card">
     <form id="f" autocomplete="off">
       <label for="branch">ส่งไปสาขา *</label>
@@ -34,9 +36,6 @@
         <div class="muted" id="calcDetail"></div>
         <div id="balLine" style="margin-top:6px"></div>
       </div>
-
-      <label for="staff">ผู้บันทึก (ครัวกลาง)</label>
-      <input id="staff" placeholder="ชื่อผู้ส่งของ">
 
       <div style="margin-top:16px">
         <button type="submit" class="btn btn-primary" id="submitBtn">บันทึก + แจ้ง LINE สาขา</button>
@@ -142,8 +141,7 @@ function load(){
     });
 
     syncUnits();
-    var s=localStorage.getItem('staff'); if(s) document.getElementById('staff').value=s;
-  }).withFailureHandler(function(e){ toast('โหลดข้อมูลไม่ได้: '+e.message); }).getEntryData();
+  }).withFailureHandler(function(e){ if(!authExpired(e)) toast('โหลดข้อมูลไม่ได้: '+e.message); }).getEntryData(AUTH.token);
 }
 
 document.getElementById('item').addEventListener('change', function(){ syncUnits(); recalc(); });
@@ -155,15 +153,14 @@ document.getElementById('item').addEventListener('change', function(){ syncUnits
 document.getElementById('f').addEventListener('submit', function(e){
   e.preventDefault();
   var payload={
+    token:AUTH.token,
     branch:document.getElementById('branch').value,
     item:document.getElementById('item').value,
     qty:document.getElementById('qty').value,
-    inputUnit:document.getElementById('unit').value,
-    staff:document.getElementById('staff').value.trim()
+    inputUnit:document.getElementById('unit').value
   };
   if(!payload.item){ toast('กรุณาเลือกสินค้า'); return; }
   if(!(parseFloat(payload.qty)>0)){ toast('กรุณากรอกจำนวน'); return; }
-  localStorage.setItem('staff', payload.staff);
 
   var used=toBase(), it=itemOf(payload.item);
   var btn=document.getElementById('submitBtn');
@@ -176,11 +173,11 @@ document.getElementById('f').addEventListener('submit', function(e){
     document.getElementById('qty').value=''; recalc();
   }).withFailureHandler(function(err){
     btn.disabled=false; btn.textContent='บันทึก + แจ้ง LINE สาขา';
-    toast('ผิดพลาด: '+err.message, 5000);
+    if(!authExpired(err)) toast('ผิดพลาด: '+err.message, 5000);
   }).submitTransfer(payload);
 });
 
-load();
+authInit(function(u){ authBar(u); load(); });
 </script>
 </body>
 </html>

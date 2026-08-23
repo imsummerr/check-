@@ -2,6 +2,7 @@
 <html lang="th">
 <head><base target="_top"><?!= include('Style'); ?></head>
 <body>
+<?!= include('Auth'); ?>
 <header>
   <div class="wrap" style="padding:0">
     <h1>📥 รับเข้าครัวกลาง</h1>
@@ -10,6 +11,7 @@
 </header>
 
 <div class="wrap">
+  <div id="authBar" style="display:none; align-items:center; gap:8px; font-size:13px; padding:10px 14px; background:var(--card); border-radius:10px; margin-bottom:14px; box-shadow:var(--shadow)"></div>
   <div class="card">
     <form id="f" autocomplete="off">
       <label for="item">สินค้า *</label>
@@ -33,9 +35,6 @@
 
       <label for="supplier">ผู้ส่ง / ซัพพลายเออร์</label>
       <input id="supplier" placeholder="ชื่อร้าน/เจ้าที่ส่งของ">
-
-      <label for="staff">ผู้บันทึก (ครัวกลาง)</label>
-      <input id="staff" placeholder="ชื่อผู้รับของ">
 
       <label for="note">หมายเหตุ</label>
       <input id="note" placeholder="เช่น ล็อตเช้า / ของสด">
@@ -110,8 +109,7 @@ function load(){
       it.insertAdjacentHTML('beforeend', g+'</optgroup>');
     });
     syncUnits();
-    var s=localStorage.getItem('staff'); if(s) document.getElementById('staff').value=s;
-  }).withFailureHandler(function(e){ toast('โหลดข้อมูลไม่ได้: '+e.message); }).getStockInData();
+  }).withFailureHandler(function(e){ if(!authExpired(e)) toast('โหลดข้อมูลไม่ได้: '+e.message); }).getStockInData(AUTH.token);
 }
 
 document.getElementById('item').addEventListener('change', function(){ syncUnits(); recalc(); });
@@ -122,14 +120,12 @@ document.getElementById('item').addEventListener('change', function(){ syncUnits
 
 document.getElementById('f').addEventListener('submit', function(e){
   e.preventDefault();
-  var payload={ item:document.getElementById('item').value,
+  var payload={ token:AUTH.token, item:document.getElementById('item').value,
     qty:document.getElementById('qty').value, inputUnit:document.getElementById('unit').value,
     supplier:document.getElementById('supplier').value.trim(),
-    staff:document.getElementById('staff').value.trim(),
     note:document.getElementById('note').value.trim() };
   if(!payload.item){ toast('กรุณาเลือกสินค้า'); return; }
   if(!(parseFloat(payload.qty)>0)){ toast('กรุณากรอกจำนวน'); return; }
-  localStorage.setItem('staff', payload.staff);
   var btn=document.getElementById('submitBtn');
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> กำลังบันทึก...';
   google.script.run.withSuccessHandler(function(res){
@@ -139,11 +135,11 @@ document.getElementById('f').addEventListener('submit', function(e){
     document.getElementById('qty').value=''; recalc();
   }).withFailureHandler(function(err){
     btn.disabled=false; btn.textContent='บันทึกรับเข้า';
-    toast('ผิดพลาด: '+err.message, 5000);
+    if(!authExpired(err)) toast('ผิดพลาด: '+err.message, 5000);
   }).submitStockIn(payload);
 });
 
-load();
+authInit(function(u){ authBar(u); load(); });
 </script>
 </body>
 </html>

@@ -2,6 +2,7 @@
 <html lang="th">
 <head><base target="_top"><?!= include('Style'); ?></head>
 <body>
+<?!= include('Auth'); ?>
 <header>
   <div class="wrap" style="padding:0">
     <h1>🌶️ ระบบสต็อกครัวกลางหม่าล่า</h1>
@@ -10,7 +11,8 @@
 </header>
 
 <div class="wrap">
-  <div class="card">
+  <div id="authBar" style="display:none; align-items:center; gap:8px; font-size:13px; padding:10px 14px; background:var(--card); border-radius:10px; margin-bottom:14px; box-shadow:var(--shadow)"></div>
+  <div class="card" id="centralActions" style="display:none">
     <div class="row">
       <div><a class="btn btn-primary" href="?page=stockin" style="text-decoration:none">📥 รับเข้าครัวกลาง</a></div>
       <div><a class="btn btn-primary" href="?page=entry" style="text-decoration:none">📤 ส่งออกไปสาขา</a></div>
@@ -96,6 +98,7 @@ function fill(id, rows, emptyId){
   document.getElementById(id).innerHTML=rows.join('');
 }
 
+function loadDash(){
 google.script.run.withSuccessHandler(function(d){
   var t=d.totals;
   document.getElementById('stats').innerHTML=
@@ -131,8 +134,18 @@ google.script.run.withSuccessHandler(function(d){
       lossCell(r['ของหาย'], r['หน่วยขาย'])+'</td></tr>';
   }), 'recentEmpty');
 }).withFailureHandler(function(e){
+  if(authExpired(e)) return;
   document.getElementById('stats').innerHTML='<div class="danger">โหลดไม่ได้: '+e.message+'</div>';
-}).getDashboard();
+}).getDashboard(AUTH.token);
+}
+authInit(function(u){
+  authBar(u);
+  // ปุ่มรับเข้า/ส่งออก แสดงเฉพาะครัวกลางและแอดมิน
+  if(u.role==='ครัวกลาง' || u.role==='แอดมิน'){
+    document.getElementById('centralActions').style.display='block';
+  }
+  loadDash();
+});
 </script>
 </body>
 </html>

@@ -19,12 +19,20 @@ var TZ = 'Asia/Bangkok';
 var SH = {
   ITEMS:     'รายการสินค้า',
   BRANCHES:  'สาขา',
+  USERS:     'ผู้ใช้งาน',
   TRANSFER:  'บันทึกโอน',
   STOCKIN:   'รับเข้าครัวกลาง',
   SUMMARY:   'สรุป',
   BRANCHSUM: 'สรุปสาขา',
   LINEIDS:   'LINE_IDs'
 };
+
+// ---- ผู้ใช้งาน / สิทธิ์ ----
+var U_COLS = ['ชื่อผู้ใช้', 'รหัสผ่าน', 'ชื่อ-สกุล', 'บทบาท', 'สาขา', 'เปิดใช้งาน'];
+var ROLE_ADMIN   = 'แอดมิน';    // ทำได้ทุกอย่าง + ดูสรุป
+var ROLE_CENTRAL = 'ครัวกลาง';  // รับเข้า + ส่งออกไปสาขา
+var ROLE_BRANCH  = 'สาขา';      // กรอกจำนวนที่แพ็คได้ (เฉพาะสาขาตัวเอง)
+var SESSION_DAYS = 30;          // อยู่ในระบบกี่วันก่อนต้องล็อกอินใหม่
 
 var CENTRAL_NAME = 'ครัวกลาง';
 
@@ -98,6 +106,113 @@ var DEFAULT_ITEMS = [
   ['มาม่า (ทุกชนิด)',       1, U_PIECE, 'ถุง', 'เส้น/แป้ง']
 ];
 
+/* ===================== ระบบล็อกอิน / สิทธิ์ ===================== */
+/**
+ * เก็บรหัสผ่านเป็น hash (SHA-256 + salt เฉพาะของชีตนี้) ไม่เก็บรหัสจริง
+ * แอดมินพิมพ์รหัสเป็นตัวอักษรธรรมดาในชีตได้ ระบบจะแปลงเป็น hash ให้เองตอนล็อกอินครั้งแรก
+ */
+function salt_() {
+  var p = PropertiesService.getScriptProperties();
+  var s = p.getProperty('PW_SALT');
+  if (!s) { s = Utilities.getUuid(); p.setProperty('PW_SALT', s); }
+  return s;
+}
+
+function hashPw_(pw) {
+  var raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
+              salt_() + String(pw), Utilities.Charset.UTF_8);
+  return 'sha256:' + Utilities.base64Encode(raw);
+}
+
+function isHash_(v) { return String(v).indexOf('sha256:') === 0; }
+
+/** ล็อกอิน — คืน token ไว้ให้หน้าเว็บเก็บ */
+function login(username, password) {
+  var u = String(username || '').trim().toLowerCase();
+  var pw = String(password || '');
+  if (!u || !pw) throw new Error('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน');
+
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.USERS);
+  if (!sh || sh.getLastRow() < 2) throw new Error('ยังไม่มีผู้ใช้ในระบบ — ให้แอดมินเพิ่มในชีต "ผู้ใช้งาน"');
+
+  var v = sh.getRange(2, 1, sh.getLastRow() - 1, U_COLS.length).getValues();
+  for (var i = 0; i < v.length; i++) {
+    if (String(v[i][0]).trim().toLowerCase() !== u) continue;
+    if (v[i][5] === false) throw new Error('บัญชีนี้ถูกปิดใช้งาน');
+
+    var stored = String(v[i][1] || '');
+    if (!stored) throw new Error('บัญชีนี้ยังไม่ได้ตั้งรหัสผ่าน');
+    if (!isHash_(stored)) {                       // แปลงรหัสธรรมดา -> hash ครั้งแรก
+      stored = hashPw_(stored);
+      sh.getRange(i + 2, 2).setValue(stored);
+    }
+    if (stored !== hashPw_(pw)) throw new Error('รหัสผ่านไม่ถูกต้อง');
+
+    var sess = {
+      u: String(v[i][0]).trim(),
+      name: String(v[i][2] || v[i][0]).trim(),
+      role: String(v[i][3] || ROLE_BRANCH).trim(),
+      branch: String(v[i][4] || '').trim(),
+      exp: Date.now() + SESSION_DAYS * 86400000
+    };
+    var token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+    PropertiesService.getScriptProperties().setProperty('SESS_' + token, JSON.stringify(sess));
+    return { token: token, name: sess.name, role: sess.role, branch: sess.branch };
+  }
+  throw new Error('ไม่พบชื่อผู้ใช้นี้');
+}
+
+function logout(token) {
+  if (token) PropertiesService.getScriptProperties().deleteProperty('SESS_' + token);
+  return { ok: true };
+}
+
+/** อ่าน session — โยน NOAUTH ถ้าไม่ผ่าน (หน้าเว็บจะเด้งฟอร์มล็อกอิน) */
+function getSession_(token) {
+  if (!token) throw new Error('NOAUTH');
+  var props = PropertiesService.getScriptProperties();
+  var raw = props.getProperty('SESS_' + token);
+  if (!raw) throw new Error('NOAUTH');
+  var s;
+  try { s = JSON.parse(raw); } catch (e) { throw new Error('NOAUTH'); }
+  if (!s || Date.now() > Number(s.exp || 0)) {
+    props.deleteProperty('SESS_' + token);
+    throw new Error('NOAUTH');
+  }
+  return s;
+}
+
+/** ตรวจสิทธิ์ — roles ว่าง = แค่ต้องล็อกอิน */
+function requireRole_(token, roles) {
+  var s = getSession_(token);
+  if (roles && roles.length && roles.indexOf(s.role) < 0) {
+    throw new Error('บัญชี "' + s.name + '" (' + s.role + ') ไม่มีสิทธิ์ทำรายการนี้');
+  }
+  return s;
+}
+
+/** หน้าเว็บเรียกตอนเปิด เพื่อดูว่ายังล็อกอินอยู่ไหม (ไม่โยน error) */
+function me(token) {
+  try {
+    var s = getSession_(token);
+    return { name: s.name, role: s.role, branch: s.branch, user: s.u };
+  } catch (e) { return null; }
+}
+
+/** เมนู: ล้าง session ทั้งหมด (บังคับทุกคนล็อกอินใหม่) */
+function logoutEveryone() {
+  var ui = SpreadsheetApp.getUi();
+  var ans = ui.alert('บังคับล็อกอินใหม่ทุกคน',
+    'ทุกคนที่ค้างอยู่ในระบบจะต้องล็อกอินใหม่ ต้องการทำต่อหรือไม่?', ui.ButtonSet.YES_NO);
+  if (ans !== ui.Button.YES) return;
+  var props = PropertiesService.getScriptProperties();
+  var all = props.getProperties(), n = 0;
+  Object.keys(all).forEach(function (k) {
+    if (k.indexOf('SESS_') === 0) { props.deleteProperty(k); n++; }
+  });
+  ui.alert('ล้างแล้ว ' + n + ' เซสชัน');
+}
+
 /* ===================== เมนูในชีต ===================== */
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -107,6 +222,7 @@ function onOpen() {
     .addItem('อัปเดตหน้า "สรุป"', 'updateSummary')
     .addSeparator()
     .addItem('🧪 ทดสอบส่ง LINE ทุกสาขา', 'testLineAll')
+    .addItem('🔒 บังคับล็อกอินใหม่ทุกคน', 'logoutEveryone')
     .addItem('แสดงลิงก์เว็บแอป', 'showWebAppUrl')
     .addToUi();
 }
@@ -134,6 +250,23 @@ function setup() {
     br.setColumnWidth(2, 320);
   }
 
+  // ---- ผู้ใช้งาน ----
+  var us = ensureSheet_(ss, SH.USERS, U_COLS);
+  var firstUser = false;
+  if (us.getLastRow() < 2) {
+    us.getRange(2, 1, 3, U_COLS.length).setValues([
+      ['admin',   '1234', 'ผู้ดูแลระบบ',   ROLE_ADMIN,   '',       true],
+      ['kitchen', '1234', 'ครัวกลาง',      ROLE_CENTRAL, '',       true],
+      ['branch1', '1234', 'พนักงานสาขา 1', ROLE_BRANCH,  'สาขา 1', true]
+    ]);
+    us.setColumnWidth(2, 260);
+    us.getRange(2, 4, 200, 1).setDataValidation(
+      SpreadsheetApp.newDataValidation()
+        .requireValueInList([ROLE_ADMIN, ROLE_CENTRAL, ROLE_BRANCH], true)
+        .setAllowInvalid(false).build());
+    firstUser = true;
+  }
+
   ensureSheet_(ss, SH.TRANSFER, T_COLS);
   ensureSheet_(ss, SH.STOCKIN, SI_COLS);
   ensureSheet_(ss, SH.LINEIDS, ['เวลา', 'ประเภท', 'sourceId', 'ข้อความ/เหตุการณ์']);
@@ -151,6 +284,7 @@ function setup() {
       : ('ชีต "รายการสินค้า" มีข้อมูลอยู่แล้ว จึงไม่เขียนทับ\n' +
          'ถ้าต้องการใส่รายการมาตรฐาน ' + DEFAULT_ITEMS.length + ' รายการใหม่ ให้กดเมนู "🔄 รีเซ็ตรายการสินค้า"')) + '\n\n' +
     'ขั้นต่อไป (ดูละเอียดใน SETUP.md):\n' +
+    (firstUser ? '⚠️ สร้างผู้ใช้ตัวอย่างให้แล้ว (รหัสผ่าน 1234 ทุกคน)\nกรุณาเปลี่ยนรหัสผ่านที่ชีต "ผู้ใช้งาน" ก่อนใช้จริง\n\n' : '') +
     '1. ใส่ชื่อสาขา + LINE Group ID ที่ชีต "สาขา"\n' +
     '2. ใส่ LINE token ที่ Project Settings > Script Properties (คีย์ LINE_TOKEN)\n' +
     '3. Deploy > New deployment > Web app (Execute as: Me, Access: Anyone)\n' +
@@ -254,7 +388,8 @@ function showWebAppUrl() {
 
 /* ===================== API ที่หน้าเว็บเรียก ===================== */
 
-function getEntryData() {
+function getEntryData(token) {
+  requireRole_(token, [ROLE_CENTRAL, ROLE_ADMIN]);
   return {
     items: getItems_(),
     branches: getBranches_(),
@@ -263,12 +398,14 @@ function getEntryData() {
   };
 }
 
-function getStockInData() {
+function getStockInData(token) {
+  requireRole_(token, [ROLE_CENTRAL, ROLE_ADMIN]);
   return { items: getItems_(), balances: balanceMap_(), webAppUrl: getWebAppUrl_() };
 }
 
 /** ครัวกลางรับของเข้าจากซัพพลายเออร์ */
 function submitStockIn(payload) {
+  var sess = requireRole_(payload && payload.token, [ROLE_CENTRAL, ROLE_ADMIN]);
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -279,7 +416,7 @@ function submitStockIn(payload) {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.STOCKIN);
     var now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
     sh.appendRow([now, it.name, qty, it.measureUnit, enteredText_(payload.qty, payload.inputUnit),
-                  String(payload.supplier || ''), String(payload.staff || ''), String(payload.note || '')]);
+                  String(payload.supplier || ''), sess.name, String(payload.note || '')]);
 
     updateSummary();
     var b = centralBalance_()[it.name];
@@ -289,6 +426,7 @@ function submitStockIn(payload) {
 
 /** ครัวกลางกรอกของออกไปสาขา */
 function submitTransfer(payload) {
+  var sess = requireRole_(payload && payload.token, [ROLE_CENTRAL, ROLE_ADMIN]);
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -315,7 +453,7 @@ function submitTransfer(payload) {
       'จาก': CENTRAL_NAME, 'ไปสาขา': branch,
       'ปริมาณต่อหน่วย': it.perUnit || '', 'หน่วยขาย': it.sellUnit,
       'ควรแพ็ค': expected, 'สถานะ': STATUS_WAIT,
-      'ผู้บันทึก': String(payload.staff || '')
+      'ผู้บันทึก': sess.name
     }));
 
     var line = notifyBranchNewTransfer_(branch, {
@@ -330,20 +468,32 @@ function submitTransfer(payload) {
   } finally { lock.releaseLock(); }
 }
 
-function getTransfer(id) {
+function getTransfer(token, id) {
+  var sess = getSession_(token);
   var found = findTransfer_(id);
   if (!found) throw new Error('ไม่พบรายการนี้ (id: ' + id + ')');
+  assertBranchAllowed_(sess, found.obj['ไปสาขา']);
   return found.obj;
+}
+
+/** พนักงานสาขาเปิด/แก้ได้เฉพาะรายการของสาขาตัวเอง */
+function assertBranchAllowed_(sess, branch) {
+  if (sess.role === ROLE_BRANCH && String(sess.branch) !== String(branch)) {
+    throw new Error('รายการนี้เป็นของ "' + branch + '" บัญชีของคุณสังกัด "' +
+                    (sess.branch || '-') + '" จึงเปิดดูไม่ได้');
+  }
 }
 
 /** พนักงานสาขากรอกจำนวนที่แพ็คได้ */
 function submitPack(payload) {
+  var sess = requireRole_(payload && payload.token, null);
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
     var found = findTransfer_(String(payload.id || '').trim());
     if (!found) throw new Error('ไม่พบรายการนี้');
     var o = found.obj;
+    assertBranchAllowed_(sess, o['ไปสาขา']);
 
     var packed = Number(payload.packed);
     if (!(packed >= 0)) throw new Error('กรุณากรอกจำนวนที่แพ็คได้');
@@ -361,13 +511,13 @@ function submitPack(payload) {
     setCell_(sh, T_COLS, found.rowIndex, 'ของหายคิดเป็น',
              lossAmt === '' ? '' : (lossAmt + ' ' + o['หน่วยวัด']));
     setCell_(sh, T_COLS, found.rowIndex, 'เวลาแพ็ค', now);
-    setCell_(sh, T_COLS, found.rowIndex, 'ผู้แพ็ค', String(payload.packer || ''));
+    setCell_(sh, T_COLS, found.rowIndex, 'ผู้แพ็ค', sess.name);
     if (payload.note) setCell_(sh, T_COLS, found.rowIndex, 'หมายเหตุ', String(payload.note));
 
     notifyBranchPacked_(o['ไปสาขา'], {
       item: o['สินค้า'], entered: o['ที่กรอก'], sellUnit: o['หน่วยขาย'],
       measureUnit: o['หน่วยวัด'], expected: expected, packed: packed,
-      loss: loss, lossAmt: lossAmt, packer: String(payload.packer || '')
+      loss: loss, lossAmt: lossAmt, packer: sess.name
     });
 
     updateSummary();
@@ -375,7 +525,8 @@ function submitPack(payload) {
   } finally { lock.releaseLock(); }
 }
 
-function getDashboard() {
+function getDashboard(token) {
+  var sess = getSession_(token);
   var agg = aggregate_();
   var bal = centralBalance_();
   var central = Object.keys(bal).map(function (k) {
@@ -385,7 +536,8 @@ function getDashboard() {
   return {
     perItem: agg.perItem, perBranch: agg.perBranch, perDay: agg.perDay.slice(0, 14),
     central: central, totals: agg.totals,
-    recent: getRecentTransfers_(15), webAppUrl: getWebAppUrl_()
+    recent: getRecentTransfers_(15), webAppUrl: getWebAppUrl_(),
+    me: { name: sess.name, role: sess.role, branch: sess.branch }
   };
 }
 
