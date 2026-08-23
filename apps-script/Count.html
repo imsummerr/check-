@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="th">
+<head><base target="_top"><?!= include('Style'); ?></head>
+<body>
+<?!= include('Auth'); ?><?!= include('Common'); ?>
+<header>
+  <div class="wrap" style="padding:0">
+    <h1>📋 เช็คสต็อกรายสัปดาห์</h1>
+    <p>นับของจริงแล้วเทียบกับยอดในระบบ</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="authBar" class="authbar"></div>
+
+  <div class="card">
+    <label for="loc">นับที่ไหน *</label>
+    <select id="loc"></select>
+    <p class="hint">กรอกเฉพาะรายการที่นับ — เว้นว่างไว้ = ไม่ได้นับ ระบบจะไม่แตะยอดนั้น</p>
+  </div>
+
+  <div class="card">
+    <div class="tablewrap">
+      <table class="count-tbl">
+        <thead>
+          <tr><th>สินค้า</th><th style="text-align:right">นับได้</th><th>ผลเทียบ</th></tr>
+        </thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+    <div id="loading" class="center muted" style="padding:20px">กำลังโหลด...</div>
+  </div>
+
+  <div class="card">
+    <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin:0">
+      <input type="checkbox" id="adjust" checked style="width:19px;height:19px;margin-top:2px;accent-color:var(--red)">
+      <span style="font-size:14.5px; color:var(--text); font-weight:400">
+        ปรับสต็อกในระบบให้ตรงกับที่นับได้
+        <span class="muted" style="display:block; font-size:12.5px">
+          ถ้าไม่ติ๊ก ระบบจะบันทึกส่วนต่างไว้ดูเฉย ๆ ไม่แก้ยอด</span>
+      </span>
+    </label>
+    <div style="margin-top:16px">
+      <button class="btn btn-primary" id="submitBtn" type="button">บันทึกผลนับ + แจ้งกลุ่ม</button>
+    </div>
+  </div>
+
+  <div class="center"><a class="link" href="?page=index">← กลับหน้าแรก</a></div>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<script>
+var ROWS = [];
+
+function rowTotal(r){
+  var p=parseInt(document.getElementById('p_'+r.i).value,10)||0;
+  var e=parseFloat(document.getElementById('r_'+r.i).value)||0;
+  return Math.max(0,p)*(Number(r.perPack)||0)+Math.max(0,e);
+}
+function touched(r){
+  return document.getElementById('p_'+r.i).value!=='' || document.getElementById('r_'+r.i).value!=='';
+}
+
+function paintRow(r){
+  var cell=document.getElementById('d_'+r.i);
+  if(!touched(r)){ cell.innerHTML='<span class="muted">ยังไม่นับ</span>'; return; }
+  var diff=rowTotal(r)-r.sysBase;
+  if(diff===0){ cell.innerHTML='<span class="diff ok">ตรง ✓</span>'; return; }
+  var t=fmtPack(Math.abs(diff), r);
+  cell.innerHTML = diff<0
+    ? '<span class="diff danger">ขาด '+t+'</span>'
+    : '<span class="diff warn">เกิน '+t+'</span>';
+}
+
+function render(rows){
+  ROWS=rows.map(function(r,i){ r.i=i; return r; });
+  document.getElementById('tb').innerHTML=ROWS.map(function(r){
+    return '<tr>'+
+      '<td><strong>'+esc(r.name)+'</strong>'+
+        '<div class="sys">ระบบ: '+esc(r.sysText)+'</div></td>'+
+      '<td style="white-space:nowrap; text-align:right">'+
+        '<input id="p_'+r.i+'" type="number" inputmode="numeric" min="0" step="1" placeholder="0" '+
+          'aria-label="'+esc(r.name)+' '+esc(r.packUnit)+'"> '+
+        '<span class="sys">'+esc(r.packUnit)+'</span><br>'+
+        '<input id="r_'+r.i+'" type="number" inputmode="decimal" min="0" step="any" placeholder="0" '+
+          'aria-label="'+esc(r.name)+' เศษ '+esc(r.subUnit)+'" style="margin-top:4px"> '+
+        '<span class="sys">'+esc(r.subUnit)+'</span>'+
+      '</td>'+
+      '<td id="d_'+r.i+'"><span class="muted">ยังไม่นับ</span></td>'+
+    '</tr>';
+  }).join('');
+  ROWS.forEach(function(r){
+    ['p_','r_'].forEach(function(pre){
+      document.getElementById(pre+r.i).addEventListener('input', function(){ paintRow(r); });
+    });
+  });
+  document.getElementById('loading').style.display = ROWS.length ? 'none' : 'block';
+  if(!ROWS.length) document.getElementById('loading').textContent='ยังไม่มีสินค้าในระบบ';
+}
+
+function loadRows(){
+  document.getElementById('loading').style.display='block';
+  document.getElementById('loading').textContent='กำลังโหลด...';
+  document.getElementById('tb').innerHTML='';
+  google.script.run.withSuccessHandler(render)
+    .withFailureHandler(function(e){
+      if(authExpired(e)) return;
+      document.getElementById('loading').textContent='โหลดไม่ได้: '+e.message;
+    }).getCountSheet(AUTH.token, val('loc'));
+}
+
+function load(){
+  google.script.run.withSuccessHandler(function(d){
+    fillLocs(document.getElementById('loc'), d.locations);
+    loadRows();
+  }).withFailureHandler(function(e){ if(!authExpired(e)) toast('โหลดไม่ได้: '+e.message); })
+    .getBootstrap(AUTH.token,'count');
+}
+
+document.getElementById('loc').addEventListener('change', loadRows);
+
+document.getElementById('submitBtn').addEventListener('click', function(){
+  var lines=ROWS.filter(touched).map(function(r){
+    return { item:r.name,
+             packs:document.getElementById('p_'+r.i).value,
+             rem:document.getElementById('r_'+r.i).value };
+  });
+  if(!lines.length){ toast('ยังไม่ได้กรอกยอดนับสักรายการ'); return; }
+  var btn=this;
+  busy(btn,true,'กำลังบันทึก...');
+  google.script.run.withSuccessHandler(function(r){
+    busy(btn,false,'บันทึกผลนับ + แจ้งกลุ่ม');
+    var msg='บันทึกแล้ว ✅ นับ '+r.counted+' รายการ<br>'+
+      (r.diffs.length ? ('⚠️ ไม่ตรง '+r.diffs.length+' รายการ') : 'ตรงกับระบบทั้งหมด 🎉');
+    toast(msg+'<br>'+(r.lineSent?'แจ้งกลุ่มแล้ว':'⚠️ '+r.lineMsg), 6000);
+    loadRows();
+  }).withFailureHandler(function(err){
+    busy(btn,false,'บันทึกผลนับ + แจ้งกลุ่ม');
+    if(!authExpired(err)) toast('ผิดพลาด: '+err.message,5000);
+  }).submitCount({ token:AUTH.token, location:val('loc'),
+    adjust:document.getElementById('adjust').checked, lines:lines });
+});
+
+authInit(function(u){ authBar(u); load(); });
+</script>
+</body>
+</html>

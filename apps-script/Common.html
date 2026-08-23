@@ -1,0 +1,64 @@
+<!-- ฟังก์ชันที่ใช้ร่วมกันทุกหน้า — include ต่อจาก Auth -->
+<script>
+/** อ่านค่าจากช่องกรอก */
+function val(id){ var el=document.getElementById(id); return el ? el.value.trim() : ''; }
+
+/** แพ็ค + เศษ → หน่วยย่อยรวม */
+function packTotal(it){
+  var p=parseInt(val('packs'),10)||0, r=parseFloat(val('rem'))||0;
+  return Math.max(0,p)*(Number(it.perPack)||0) + Math.max(0,r);
+}
+
+/** หน่วยย่อยรวม → ข้อความ "3 แพ็ค 5 ไม้" */
+function fmtPack(base, it){
+  base=Number(base)||0;
+  var per=Number(it.perPack)||0;
+  if(per<=0) return base+' '+it.subUnit;
+  var neg=base<0, a=Math.abs(base);
+  var p=Math.floor(a/per), r=Math.round((a-p*per)*100)/100;
+  var s=(neg?'-':'');
+  if(p&&r) return s+p+' '+it.packUnit+' '+r+' '+it.subUnit;
+  if(p)    return s+p+' '+it.packUnit;
+  return s+r+' '+it.subUnit;
+}
+
+/** เติมรายการสินค้าลง select แบ่งตามหมวด */
+function fillItems(sel, items){
+  sel.innerHTML='<option value="">— เลือกสินค้า —</option>';
+  var cats={};
+  items.forEach(function(x){ (cats[x.category||'อื่น ๆ']=cats[x.category||'อื่น ๆ']||[]).push(x); });
+  Object.keys(cats).forEach(function(c){
+    var g='<optgroup label="'+esc(c)+'">';
+    cats[c].forEach(function(x){
+      var per = x.perPack>0 ? (' — '+x.perPack+' '+x.subUnit+'/'+x.packUnit) : '';
+      g+='<option value="'+esc(x.name)+'">'+esc(x.name)+esc(per)+'</option>';
+    });
+    sel.insertAdjacentHTML('beforeend', g+'</optgroup>');
+  });
+}
+
+/** เติมรายชื่อสถานที่ลง select */
+function fillLocs(sel, locs){
+  sel.innerHTML='';
+  locs.forEach(function(l){ sel.insertAdjacentHTML('beforeend','<option>'+esc(l.name)+'</option>'); });
+}
+
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});
+}
+
+function toast(msg, ms){
+  var t=document.getElementById('toast');
+  if(!t) return;
+  t.innerHTML=msg; t.style.display='block';
+  clearTimeout(t._h); t._h=setTimeout(function(){ t.style.display='none'; }, ms||3500);
+}
+
+function busy(btn, on, label){
+  btn.disabled=on;
+  btn.innerHTML = on ? ('<span class="spin"></span> '+label) : label;
+}
+
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+</script>

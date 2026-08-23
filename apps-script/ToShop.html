@@ -5,8 +5,8 @@
 <?!= include('Auth'); ?><?!= include('Common'); ?>
 <header>
   <div class="wrap" style="padding:0">
-    <h1>📥 ของเข้าครัวกลาง</h1>
-    <p>บันทึกของที่เสียบและแพ็คเสร็จแล้ว</p>
+    <h1>🏪 ของเข้าร้าน</h1>
+    <p>ส่งของจากครัวกลางไปสาขา</p>
   </div>
 </header>
 
@@ -15,6 +15,9 @@
 
   <div class="card">
     <form id="f" autocomplete="off">
+      <label for="branch">ส่งไปสาขา *</label>
+      <select id="branch" required></select>
+
       <label for="item">สินค้า *</label>
       <select id="item" required></select>
 
@@ -37,7 +40,7 @@
 
       <div class="row">
         <div>
-          <label for="date">วันที่เข้า</label>
+          <label for="date">วันที่เข้าร้าน</label>
           <input id="date" type="date">
         </div>
         <div>
@@ -48,10 +51,10 @@
       <p class="hint" id="expHint"></p>
 
       <label for="note">หมายเหตุ</label>
-      <input id="note" placeholder="เช่น ล็อตเช้า">
+      <input id="note" placeholder="เช่น รอบเช้า">
 
       <div style="margin-top:16px">
-        <button type="submit" class="btn btn-primary" id="submitBtn">บันทึก + แจ้งกลุ่มครัวกลาง</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">บันทึก + แจ้งกลุ่มสาขา</button>
       </div>
     </form>
   </div>
@@ -62,26 +65,22 @@
 <div id="toast" class="toast" style="display:none"></div>
 
 <script>
-var D = { items: [], central: '', balances: {} };
-
+var D = { items: [], branches: [], central: '', balances: {} };
 function itemOf(n){ for(var i=0;i<D.items.length;i++) if(D.items[i].name===n) return D.items[i]; return null; }
-function balOf(n){ var m=D.balances[D.central]||{}; return Number(m[n])||0; }
+function centralBal(n){ var m=D.balances[D.central]||{}; return Number(m[n])||0; }
 
 function syncUnits(){
-  var it=itemOf(val('item'));
-  if(!it) return;
+  var it=itemOf(val('item')); if(!it) return;
   document.getElementById('packsLabel').textContent=it.packUnit;
   document.getElementById('remLabel').textContent='เศษ ('+it.subUnit+')';
-  document.getElementById('rem').placeholder='0';
   document.getElementById('expHint').textContent =
-    it.shelfDays>0 ? ('เว้นว่างไว้ได้ ระบบจะคิดให้ '+it.shelfDays+' วันนับจากวันที่เข้า')
-                   : 'สินค้านี้ยังไม่ได้ตั้งอายุเก็บในชีต "รายการสินค้า"';
+    it.shelfDays>0 ? ('เว้นว่างได้ ระบบคิดให้ '+it.shelfDays+' วันนับจากวันที่เข้าร้าน')
+                   : 'สินค้านี้ยังไม่ได้ตั้งอายุเก็บ';
   autoExpiry();
 }
-
 function autoExpiry(){
   var it=itemOf(val('item')), d=val('date');
-  if(!it || !d || !it.shelfDays) return;
+  if(!it||!d||!it.shelfDays) return;
   var exp=document.getElementById('expiry');
   if(exp.dataset.touched==='1') return;
   var t=new Date(d+'T00:00:00'); t.setDate(t.getDate()+it.shelfDays);
@@ -91,33 +90,34 @@ function autoExpiry(){
 function recalc(){
   var it=itemOf(val('item')), box=document.getElementById('calc');
   if(!it){ box.style.display='none'; return; }
-  var total=packTotal(it);
+  var total=packTotal(it), bal=centralBal(it.name);
   box.style.display='block';
-  document.getElementById('calcMain').innerHTML= total>0
-    ? ('เข้าสต็อก <strong class="big">'+fmtPack(total,it)+'</strong>')
-    : 'กรอกจำนวนที่แพ็คได้';
-  var bal=balOf(it.name);
-  document.getElementById('calcSub').textContent=
-    'คงเหลือครัวกลางตอนนี้ '+fmtPack(bal,it)+
-    (total>0 ? (' → จะเป็น '+fmtPack(bal+total,it)) : '');
+  document.getElementById('calcMain').innerHTML = total>0
+    ? ('ส่งเข้าร้าน <strong class="big">'+fmtPack(total,it)+'</strong>' +
+       (it.perPack>0 ? ' <span class="muted">(1 '+it.packUnit+' = '+it.perPack+' '+it.subUnit+')</span>' : ''))
+    : 'กรอกจำนวนที่จะส่ง';
+  var after=bal-total;
+  document.getElementById('calcSub').innerHTML =
+    'ครัวกลางมี '+fmtPack(bal,it)+
+    (total>0 ? (' → เหลือ '+fmtPack(after,it) +
+      (after<0 ? ' <span class="danger">⚠️ มากกว่าที่มี</span>' : '')) : '');
 }
 
 function load(){
   google.script.run.withSuccessHandler(function(d){
     D=d;
+    fillLocs(document.getElementById('branch'), d.branches);
     fillItems(document.getElementById('item'), d.items);
-    document.getElementById('date').value=new Date().toISOString().slice(0,10);
+    document.getElementById('date').value=todayISO();
     syncUnits();
   }).withFailureHandler(function(e){ if(!authExpired(e)) toast('โหลดไม่ได้: '+e.message); })
-    .getBootstrap(AUTH.token,'stockin');
+    .getBootstrap(AUTH.token,'toshop');
 }
 
 document.getElementById('item').addEventListener('change', function(){ syncUnits(); recalc(); });
-document.getElementById('date').addEventListener('change', function(){ autoExpiry(); });
+document.getElementById('date').addEventListener('change', autoExpiry);
 document.getElementById('expiry').addEventListener('input', function(){ this.dataset.touched='1'; });
-['packs','rem'].forEach(function(id){
-  document.getElementById(id).addEventListener('input', recalc);
-});
+['packs','rem'].forEach(function(id){ document.getElementById(id).addEventListener('input', recalc); });
 
 document.getElementById('f').addEventListener('submit', function(e){
   e.preventDefault();
@@ -127,16 +127,16 @@ document.getElementById('f').addEventListener('submit', function(e){
   var used=packTotal(it), btn=document.getElementById('submitBtn');
   busy(btn,true,'กำลังบันทึก...');
   google.script.run.withSuccessHandler(function(r){
-    busy(btn,false,'บันทึก + แจ้งกลุ่มครัวกลาง');
+    busy(btn,false,'บันทึก + แจ้งกลุ่มสาขา');
     var m=D.balances[D.central]||(D.balances[D.central]={});
-    m[it.name]=(Number(m[it.name])||0)+used;
-    toast('บันทึกแล้ว ✅ '+r.text+'<br>'+(r.lineSent?'แจ้งกลุ่มครัวกลางแล้ว':'⚠️ '+r.lineMsg),4500);
+    m[it.name]=(Number(m[it.name])||0)-used;
+    toast('ส่งแล้ว ✅ '+r.text+'<br>'+(r.lineSent?'แจ้งกลุ่มสาขาแล้ว':'⚠️ '+r.lineMsg),4500);
     document.getElementById('packs').value=''; document.getElementById('rem').value='';
     recalc();
   }).withFailureHandler(function(err){
-    busy(btn,false,'บันทึก + แจ้งกลุ่มครัวกลาง');
+    busy(btn,false,'บันทึก + แจ้งกลุ่มสาขา');
     if(!authExpired(err)) toast('ผิดพลาด: '+err.message,5000);
-  }).submitStockIn({ token:AUTH.token, item:it.name,
+  }).submitToShop({ token:AUTH.token, item:it.name, branch:val('branch'),
     packs:val('packs'), rem:val('rem'), date:val('date'),
     expiry:val('expiry'), note:val('note') });
 });
