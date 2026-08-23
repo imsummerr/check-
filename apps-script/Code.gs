@@ -24,6 +24,7 @@ var SH = {
   TOSHOP:    'ของเข้าร้าน',
   WASTE:     'ของเสีย',
   COUNT:     'เช็คสต็อก',
+  POS:       'ยอด POS',
   SUMMARY:   'สรุปสต็อก',
   LINEIDS:   'LINE_IDs'
 };
@@ -40,64 +41,71 @@ var ROLE_BRANCH  = 'สาขา';
 var SESSION_DAYS = 30;
 
 // หัวคอลัมน์ (ห้ามสลับลำดับ)
-var I_COLS  = ['สินค้า', 'หน่วยย่อย', 'หน่วยแพ็ค', 'หน่วยย่อยต่อแพ็ค', 'อายุเก็บ(วัน)', 'หมวด', 'หมายเหตุ'];
+var I_COLS  = ['สินค้า', 'หน่วยย่อย', 'หน่วยแพ็ค', 'หน่วยย่อยต่อแพ็ค', 'ราคาขาย/หน่วยย่อย',
+               'อายุเก็บ(วัน)', 'หมวด', 'หมายเหตุ'];
 var L_COLS  = ['สถานที่', 'ประเภท', 'LINE Group ID', 'เปิดใช้งาน'];
 var SI_COLS = ['รหัส', 'วันที่', 'สินค้า', 'แพ็ค', 'เศษ', 'รวม(หน่วยย่อย)', 'วันหมดอายุ',
                'ผู้บันทึก', 'หมายเหตุ', 'แจ้งหมดอายุแล้ว'];
 var TS_COLS = ['รหัส', 'วันที่', 'สินค้า', 'สาขา', 'แพ็ค', 'เศษ', 'รวม(หน่วยย่อย)', 'วันหมดอายุ',
                'ผู้บันทึก', 'หมายเหตุ', 'แจ้งหมดอายุแล้ว'];
-var W_COLS  = ['วันที่', 'สถานที่', 'สินค้า', 'แพ็ค', 'เศษ', 'รวม(หน่วยย่อย)', 'สาเหตุ', 'ผู้บันทึก'];
+var W_COLS  = ['วันที่', 'สถานที่', 'ประเภท', 'สินค้า', 'แพ็ค', 'เศษ', 'รวม(หน่วยย่อย)', 'สาเหตุ', 'ผู้บันทึก'];
 var C_COLS  = ['วันที่', 'สถานที่', 'สินค้า', 'ยอดระบบ', 'นับได้', 'ส่วนต่าง', 'ปรับสต็อก', 'ผู้นับ', 'หมายเหตุ'];
+var P_COLS  = ['วันที่', 'สถานที่', 'ยอดเงินเข้า', 'ส่วนลด', 'หมายเหตุ', 'ผู้บันทึก'];
+
+// ประเภทของที่ออกจากสต็อกโดยไม่ได้ขาย
+var OUT_WASTE = 'ของเสีย';    // ทิ้ง/เน่า/หมดอายุ
+var OUT_FREE  = 'แถมฟรี';     // เช่น น้ำจิ้มที่แถมให้ลูกค้า
 
 var UNIT_SUB  = ['ไม้', 'กรัม', 'ชิ้น'];   // หน่วยย่อย
 var UNIT_PACK = ['แพ็ค', 'ถุง'];           // หน่วยแพ็ค
 
 /**
- * สินค้าตั้งต้น — [ชื่อ, หน่วยย่อย, หน่วยแพ็ค, หน่วยย่อยต่อแพ็ค, อายุเก็บ(วัน), หมวด]
- * ⚠️ ตัวเลข "หน่วยย่อยต่อแพ็ค" และ "อายุเก็บ" เป็นค่าตั้งต้น — ตรวจและแก้ในชีตให้ตรงกับที่ร้านใช้จริง
+ * สินค้าตั้งต้น — [ชื่อ, หน่วยย่อย, หน่วยแพ็ค, หน่วยย่อยต่อแพ็ค, ราคาขาย/หน่วยย่อย, อายุเก็บ(วัน), หมวด]
+ * ⚠️ ราคาตั้งต้นเป็น 0 (ยังไม่ได้ตั้ง) — ต้องใส่ราคาจริงในชีต ไม่งั้นรายงานเช็คของหายคิดเงินไม่ได้
+ * ⚠️ "หน่วยย่อยต่อแพ็ค" และ "อายุเก็บ" เป็นค่าเดา — ตรวจและแก้ให้ตรงกับที่ร้านใช้จริง
  */
 var DEFAULT_ITEMS = [
   // ---- ชั่งกรัม → ถุง ----
-  ['สันคอ',                'กรัม', 'ถุง',  30,  3, 'เนื้อสัตว์'],
-  ['หมูสามชั้น',           'กรัม', 'ถุง',  30,  3, 'เนื้อสัตว์'],
-  ['เนื้อแดง',             'กรัม', 'ถุง',  30,  3, 'เนื้อสัตว์'],
-  ['หมึก',                 'กรัม', 'ถุง',  35,  2, 'ทะเล'],
-  ['ปลาดอลลี่',            'กรัม', 'ถุง',  35,  2, 'ทะเล'],
-  ['ปลาหมึกกรอบ',          'กรัม', 'ถุง',  35,  3, 'ทะเล'],
-  ['แมงกะพรุน',            'กรัม', 'ถุง',  35,  3, 'ทะเล'],
-  ['ผักกาดขาว',            'กรัม', 'ถุง', 100,  3, 'ผัก'],
-  ['กะหล่ำ',               'กรัม', 'ถุง', 100,  3, 'ผัก'],
-  ['ผักบุ้ง',              'กรัม', 'ถุง', 100,  2, 'ผัก'],
-  ['กวางตุ้ง',             'กรัม', 'ถุง',  50,  2, 'ผัก'],
-  ['เห็ดเข็มทอง',          'กรัม', 'ถุง',  50,  5, 'ผัก'],
-  ['เห็ดชิเมจิ',           'กรัม', 'ถุง',  50,  5, 'ผัก'],
-  ['รากบัว',               'กรัม', 'ถุง',  50,  5, 'ผัก'],
-  ['ข้าวโพด',              'กรัม', 'ถุง',  25,  5, 'ผัก'],
-  ['สาหร่าย',              'กรัม', 'ถุง',   5,  7, 'ผัก'],
-  ['เส้นมันเทศ',           'กรัม', 'ถุง',  55, 14, 'เส้น/แป้ง'],
-  ['เส้นอุด้ง',            'กรัม', 'ถุง',  50, 14, 'เส้น/แป้ง'],
+  ['สันคอ',                'กรัม', 'ถุง',  30,  0,   3, 'เนื้อสัตว์'],
+  ['หมูสามชั้น',           'กรัม', 'ถุง',  30,  0,   3, 'เนื้อสัตว์'],
+  ['เนื้อแดง',             'กรัม', 'ถุง',  30,  0,   3, 'เนื้อสัตว์'],
+  ['หมึก',                 'กรัม', 'ถุง',  35,  0,   2, 'ทะเล'],
+  ['ปลาดอลลี่',            'กรัม', 'ถุง',  35,  0,   2, 'ทะเล'],
+  ['ปลาหมึกกรอบ',          'กรัม', 'ถุง',  35,  0,   3, 'ทะเล'],
+  ['แมงกะพรุน',            'กรัม', 'ถุง',  35,  0,   3, 'ทะเล'],
+  ['ผักกาดขาว',            'กรัม', 'ถุง', 100,  0,   3, 'ผัก'],
+  ['กะหล่ำ',               'กรัม', 'ถุง', 100,  0,   3, 'ผัก'],
+  ['ผักบุ้ง',              'กรัม', 'ถุง', 100,  0,   2, 'ผัก'],
+  ['กวางตุ้ง',             'กรัม', 'ถุง',  50,  0,   2, 'ผัก'],
+  ['เห็ดเข็มทอง',          'กรัม', 'ถุง',  50,  0,   5, 'ผัก'],
+  ['เห็ดชิเมจิ',           'กรัม', 'ถุง',  50,  0,   5, 'ผัก'],
+  ['รากบัว',               'กรัม', 'ถุง',  50,  0,   5, 'ผัก'],
+  ['ข้าวโพด',              'กรัม', 'ถุง',  25,  0,   5, 'ผัก'],
+  ['สาหร่าย',              'กรัม', 'ถุง',   5,  0,   7, 'ผัก'],
+  ['เส้นมันเทศ',           'กรัม', 'ถุง',  55,  0,  14, 'เส้น/แป้ง'],
+  ['เส้นอุด้ง',            'กรัม', 'ถุง',  50,  0,  14, 'เส้น/แป้ง'],
 
   // ---- เสียบไม้ → แพ็ค (7 ไม้/แพ็ค เป็นค่าตั้งต้น ตรวจสอบด้วย) ----
-  ['ต็อก',                 'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['ไส้กรอกพันเบคอน',      'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['เต้าหู้หมู',           'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['ฟองเต้าหู้สามเหลี่ยม', 'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['ปูอัด',                'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['เต้าหู้ชีส',           'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['ชีสหลายสี',            'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['เต้าหู้หลอด',          'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['ปูอัดชีส',             'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['ปูอัดยาว',             'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['เต้าหู้ปลาแผ่น',       'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['ฟองเต้าหู้',           'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['ไส้กรอกหนังกรอบ',      'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['ไส้กรอกชมพู',          'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
-  ['เห็ดออรินจิ',          'ไม้',  'แพ็ค',  7,  5, 'เสียบไม้'],
+  ['ต็อก',                 'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['ไส้กรอกพันเบคอน',      'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['เต้าหู้หมู',           'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['ฟองเต้าหู้สามเหลี่ยม', 'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['ปูอัด',                'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['เต้าหู้ชีส',           'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['ชีสหลายสี',            'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['เต้าหู้หลอด',          'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['ปูอัดชีส',             'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['ปูอัดยาว',             'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['เต้าหู้ปลาแผ่น',       'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['ฟองเต้าหู้',           'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['ไส้กรอกหนังกรอบ',      'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['ไส้กรอกชมพู',          'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['เห็ดออรินจิ',          'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
 
   // ---- นับชิ้น → ถุง ----
-  ['ควิซ',                 'ชิ้น', 'ถุง',   1,  7, 'แปรรูป'],
-  ['วุ้นเส้นหม่าล่า',      'ชิ้น', 'ถุง',   1, 30, 'เส้น/แป้ง'],
-  ['มาม่า (ทุกชนิด)',      'ชิ้น', 'ถุง',   1, 90, 'เส้น/แป้ง']
+  ['ควิซ',                 'ชิ้น', 'ถุง',   1,  0,   7, 'แปรรูป'],
+  ['วุ้นเส้นหม่าล่า',      'ชิ้น', 'ถุง',   1,  0,  30, 'เส้น/แป้ง'],
+  ['มาม่า (ทุกชนิด)',      'ชิ้น', 'ถุง',   1,  0,  90, 'เส้น/แป้ง']
 ];
 
 /* ===================== เมนู ===================== */
@@ -109,6 +117,7 @@ function onOpen() {
     .addSeparator()
     .addItem('🔄 รีเซ็ตรายการสินค้า', 'resetItems')
     .addItem('อัปเดตหน้า "สรุปสต็อก"', 'updateSummary')
+    .addItem('🔎 เปิดรายงานเช็คของหาย', 'showWebAppUrl')
     .addSeparator()
     .addItem('🧪 ทดสอบส่ง LINE ทุกกลุ่ม', 'testLineAll')
     .addItem('⏰ ทดสอบแจ้งวันหมดอายุเดี๋ยวนี้', 'checkExpiryDaily')
@@ -165,6 +174,10 @@ function setup() {
   ensureSheet_(ss, SH.TOSHOP,  TS_COLS);
   ensureSheet_(ss, SH.WASTE,   W_COLS);
   ensureSheet_(ss, SH.COUNT,   C_COLS);
+  var wsh = ensureSheet_(ss, SH.WASTE, W_COLS);
+  wsh.getRange(2, 3, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireValueInList([OUT_WASTE, OUT_FREE], true).setAllowInvalid(false).build());
+  ensureSheet_(ss, SH.POS, P_COLS);
   ensureSheet_(ss, SH.LINEIDS, ['เวลา', 'ประเภท', 'sourceId', 'ข้อความ/เหตุการณ์']);
   ensureSheet_(ss, SH.SUMMARY, ['สถานที่', 'สินค้า', 'คงเหลือ', 'หน่วยแพ็ค', 'เศษ', 'หน่วยย่อย', 'รวม(หน่วยย่อย)']);
 
@@ -197,7 +210,7 @@ function writeItemsSheet_() {
     .setFontWeight('bold').setBackground('#c0392b').setFontColor('#ffffff');
   sh.setFrozenRows(1);
   var rows = DEFAULT_ITEMS.map(function (r) {
-    return [r[0], r[1], r[2], r[3], r[4], r[5], 'ตรวจสอบตัวเลข'];
+    return [r[0], r[1], r[2], r[3], r[4], r[5], r[6], 'ตรวจสอบตัวเลข+ใส่ราคา'];
   });
   sh.getRange(2, 1, rows.length, I_COLS.length).setValues(rows);
   sh.setColumnWidth(1, 190);
@@ -245,7 +258,8 @@ function installTriggers() {
 /* ===================== เว็บ ===================== */
 function doGet(e) {
   var page = (e && e.parameter && e.parameter.page) || 'index';
-  var allow = { index: 'Index', stockin: 'StockIn', toshop: 'ToShop', count: 'Count', waste: 'Waste' };
+  var allow = { index: 'Index', stockin: 'StockIn', toshop: 'ToShop', count: 'Count',
+                waste: 'Waste', pos: 'Pos', report: 'Report' };
   var file = allow[page] || 'Index';
   return HtmlService.createTemplateFromFile(file).evaluate()
     .setTitle('ระบบสต็อกครัวกลางหม่าล่า')
@@ -353,8 +367,9 @@ function getItems_() {
         subUnit: String(r[1] || 'ชิ้น').trim(),
         packUnit: String(r[2] || 'แพ็ค').trim(),
         perPack: Number(r[3]) || 0,
-        shelfDays: Number(r[4]) || 0,
-        category: String(r[5] || '')
+        price: Number(r[4]) || 0,
+        shelfDays: Number(r[5]) || 0,
+        category: String(r[6] || '')
       };
     });
 }
@@ -417,6 +432,8 @@ function fmtPack_(base, it) {
   if (s.packs) return s.packs + ' ' + it.packUnit;
   return s.rem + ' ' + it.subUnit;
 }
+
+function round_(n, d) { var f = Math.pow(10, d || 0); return Math.round((Number(n) || 0) * f) / f; }
 
 function today_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'); }
 function nowStr_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'); }
@@ -588,20 +605,21 @@ function submitWaste(p) {
     var total = toBase_(p.packs, p.rem, it.perPack);
     if (!(total > 0)) throw new Error('กรุณากรอกจำนวนของเสีย');
 
+    var kind = (String(p.kind || '') === OUT_FREE) ? OUT_FREE : OUT_WASTE;
     SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.WASTE).appendRow([
-      today_(), loc, it.name, Math.floor(Number(p.packs) || 0), Number(p.rem) || 0, total,
+      today_(), loc, kind, it.name, Math.floor(Number(p.packs) || 0), Number(p.rem) || 0, total,
       String(p.reason || ''), sess.name
     ]);
 
     var line = linePush_(groupIdOf_(loc),
-      '🗑️ บันทึกของเสีย — ' + loc + '\n' +
+      (kind === OUT_FREE ? '🎁 บันทึกของแถมฟรี — ' : '🗑️ บันทึกของเสีย — ') + loc + '\n' +
       '• ' + it.name + '  ' + fmtPack_(total, it) + '\n' +
       (p.reason ? ('• สาเหตุ ' + p.reason + '\n') : '') +
       '• คงเหลือ ' + fmtPack_(balanceOf_(loc, it.name), it) + '\n' +
       '• โดย ' + sess.name);
 
     updateSummary();
-    return { ok: true, text: fmtPack_(total, it),
+    return { ok: true, text: fmtPack_(total, it), kind: kind,
              balance: fmtPack_(balanceOf_(loc, it.name), it),
              lineSent: line.sent, lineMsg: line.msg };
   } finally { lock.releaseLock(); }
@@ -672,6 +690,155 @@ function submitCount(p) {
     return { ok: true, counted: rows.length, diffs: out, adjusted: adjust,
              lineSent: line.sent, lineMsg: line.msg };
   } finally { lock.releaseLock(); }
+}
+
+/* ===================== API: ยอด POS ===================== */
+function submitPos(p) {
+  var sess = requireRole_(p && p.token, null);
+  var loc = String(p.location || '').trim();
+  if (!loc) throw new Error('กรุณาเลือกสถานที่');
+  assertLocAllowed_(sess, loc);
+  var money = Number(p.money) || 0;
+  var disc = Number(p.discount) || 0;
+  if (money < 0 || disc < 0) throw new Error('ยอดเงินต้องไม่ติดลบ');
+  if (!money && !disc) throw new Error('กรุณากรอกยอดเงินเข้าหรือส่วนลด');
+
+  var date = String(p.date || today_()).slice(0, 10);
+  SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.POS)
+    .appendRow([date, loc, money, disc, String(p.note || ''), sess.name]);
+  return { ok: true, date: date, money: money, discount: disc };
+}
+
+/* ===================== API: รายงานเช็คของหาย ===================== */
+/**
+ * ขายได้(หน่วยย่อย) = นับต้นงวด + ของเข้า − ของเสีย − แถมฟรี − นับปลายงวด
+ * ยอดที่ควรได้      = Σ(ขายได้ × ราคา) − ส่วนลด
+ * ส่วนต่าง          = เงินเข้าจริง − ยอดที่ควรได้     (ติดลบ = เงินขาด/ของหาย)
+ */
+function getLossReport(token, loc, from, to) {
+  var sess = getSession_(token);
+  loc = String(loc || '').trim();
+  assertLocAllowed_(sess, loc);
+  from = String(from || '').slice(0, 10);
+  to   = String(to || '').slice(0, 10);
+  if (!from || !to) throw new Error('กรุณาเลือกช่วงวันที่');
+  if (from > to) throw new Error('วันเริ่มต้องไม่เกินวันสิ้นสุด');
+
+  var items = getItems_(), map = {};
+  items.forEach(function (i) { map[i.name] = i; });
+  var isCentral = false;
+  getLocations_().forEach(function (l) { if (l.name === loc && l.type === LOC_CENTRAL) isCentral = true; });
+
+  // ---- หาวันนับต้นงวด/ปลายงวด ----
+  var ci = idx_(C_COLS);
+  var counts = rowsOf_(SH.COUNT, C_COLS)
+    .filter(function (r) { return String(r[ci['สถานที่']]) === loc; })
+    .map(function (r) { return { d: dstr_(r[ci['วันที่']]), item: r[ci['สินค้า']], qty: Number(r[ci['นับได้']]) || 0 }; });
+  if (!counts.length) throw new Error('ยังไม่มีข้อมูลเช็คสต็อกของ "' + loc + '"');
+
+  var dates = {};
+  counts.forEach(function (c) { dates[c.d] = 1; });
+  var all = Object.keys(dates).sort();
+  var baseDate = null, endDate = null;
+  all.forEach(function (d) {
+    if (d <= from) baseDate = d;
+    if (d <= to) endDate = d;
+  });
+  if (!endDate) throw new Error('ไม่พบการนับสต็อกในช่วงที่เลือก');
+  if (!baseDate) baseDate = all[0];
+  if (baseDate === endDate) {
+    throw new Error('ช่วงนี้มีการนับสต็อกแค่ครั้งเดียว (' + thaiDate_(endDate) + ')\n' +
+                    'ต้องมีการนับอย่างน้อย 2 ครั้งถึงจะเทียบได้');
+  }
+
+  function countAt(d) {
+    var m = {};
+    counts.forEach(function (c) { if (c.d === d) m[c.item] = c.qty; });
+    return m;
+  }
+  var baseMap = countAt(baseDate), endMap = countAt(endDate);
+  var inRange = function (d) { return d > baseDate && d <= endDate; };
+
+  // ---- ของเข้าระหว่างงวด ----
+  var inMap = {};
+  if (isCentral) {
+    var si = idx_(SI_COLS);
+    rowsOf_(SH.STOCKIN, SI_COLS).forEach(function (r) {
+      if (!inRange(dstr_(r[si['วันที่']]))) return;
+      var k = r[si['สินค้า']];
+      inMap[k] = (inMap[k] || 0) + (Number(r[si['รวม(หน่วยย่อย)']]) || 0);
+    });
+  } else {
+    var ti = idx_(TS_COLS);
+    rowsOf_(SH.TOSHOP, TS_COLS).forEach(function (r) {
+      if (String(r[ti['สาขา']]) !== loc) return;
+      if (!inRange(dstr_(r[ti['วันที่']]))) return;
+      var k = r[ti['สินค้า']];
+      inMap[k] = (inMap[k] || 0) + (Number(r[ti['รวม(หน่วยย่อย)']]) || 0);
+    });
+  }
+
+  // ---- ของเสีย / แถมฟรี ระหว่างงวด ----
+  var wasteMap = {}, freeMap = {};
+  var wi = idx_(W_COLS);
+  rowsOf_(SH.WASTE, W_COLS).forEach(function (r) {
+    if (String(r[wi['สถานที่']]) !== loc) return;
+    if (!inRange(dstr_(r[wi['วันที่']]))) return;
+    var k = r[wi['สินค้า']], q = Number(r[wi['รวม(หน่วยย่อย)']]) || 0;
+    if (String(r[wi['ประเภท']]) === OUT_FREE) freeMap[k] = (freeMap[k] || 0) + q;
+    else wasteMap[k] = (wasteMap[k] || 0) + q;
+  });
+
+  // ---- ประกอบรายงานต่อสินค้า ----
+  var names = {};
+  [baseMap, endMap, inMap, wasteMap, freeMap].forEach(function (m) {
+    Object.keys(m).forEach(function (k) { names[k] = 1; });
+  });
+  var rows = [], totalValue = 0, noPrice = [];
+  Object.keys(names).sort(function (a, b) { return a.localeCompare(b, 'th'); }).forEach(function (k) {
+    var it = map[k] || { subUnit: '', packUnit: '', perPack: 0, price: 0 };
+    var base = Number(baseMap[k]) || 0, inn = Number(inMap[k]) || 0;
+    var wst = Number(wasteMap[k]) || 0, fre = Number(freeMap[k]) || 0;
+    var end = Number(endMap[k]) || 0;
+    var sold = base + inn - wst - fre - end;
+    if (!base && !inn && !wst && !fre && !end) return;
+    var value = sold * (Number(it.price) || 0);
+    totalValue += value;
+    if (sold > 0 && !(Number(it.price) > 0)) noPrice.push(k);
+    rows.push({
+      item: k, subUnit: it.subUnit,
+      base: base, inn: inn, waste: wst, free: fre, end: end,
+      sold: sold, soldText: fmtPack_(sold, it),
+      price: Number(it.price) || 0, value: round_(value, 2)
+    });
+  });
+
+  // ---- POS ระหว่างงวด ----
+  var pi = idx_(P_COLS), money = 0, discount = 0, posDays = 0;
+  rowsOf_(SH.POS, P_COLS).forEach(function (r) {
+    if (String(r[pi['สถานที่']]) !== loc) return;
+    if (!inRange(dstr_(r[pi['วันที่']]))) return;
+    money += Number(r[pi['ยอดเงินเข้า']]) || 0;
+    discount += Number(r[pi['ส่วนลด']]) || 0;
+    posDays++;
+  });
+
+  var expected = totalValue - discount;
+  return {
+    loc: loc, baseDate: baseDate, endDate: endDate,
+    baseDateText: thaiDate_(baseDate), endDateText: thaiDate_(endDate),
+    rows: rows,
+    totalValue: round_(totalValue, 2), discount: round_(discount, 2),
+    expected: round_(expected, 2), money: round_(money, 2),
+    diff: round_(money - expected, 2), posDays: posDays,
+    noPrice: noPrice
+  };
+}
+
+/** แปลงค่าวันที่จากชีต (Date หรือ string) เป็น yyyy-MM-dd */
+function dstr_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+  return String(v || '').slice(0, 10);
 }
 
 /* ===================== API: หน้าแรก ===================== */
