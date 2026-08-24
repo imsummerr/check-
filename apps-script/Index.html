@@ -18,9 +18,8 @@
       <a class="home-btn" href="?page=stockin" id="btnIn">📥 ของเข้าครัวกลาง<small>เสียบ+แพ็คเสร็จแล้วลงตรงนี้</small></a>
       <a class="home-btn" href="?page=toshop" id="btnShop">🏪 ของเข้าร้าน<small>ส่งจากครัวกลางไปสาขา</small></a>
       <a class="home-btn alt" href="?page=count">📋 เช็คสต็อกรายสัปดาห์<small>นับจริงเทียบกับระบบ</small></a>
-      <a class="home-btn alt" href="?page=waste">🗑️ ของเสีย / ของแถม<small>ตัดออกจากสต็อก</small></a>
-      <a class="home-btn alt" href="?page=pos" id="btnPos">💵 บันทึกยอด POS<small>เงินเข้า + ส่วนลด</small></a>
-      <a class="home-btn alt" href="?page=report" id="btnReport">🔎 ตรวจเช็คของหาย<small>เทียบของกับเงิน</small></a>
+      <a class="home-btn alt" href="?page=waste">🗑️ ของเสีย<small>ตัดออกจากสต็อก</small></a>
+      <a class="home-btn alt" href="?page=sales" id="btnSales" style="display:none">💵 สรุปยอดขาย<small>ยอด POS + ตรวจของหาย</small></a>
     </div>
   </div>
 
@@ -88,6 +87,10 @@ authInit(function(u){
   if(u.role==='สาขา'){
     document.getElementById('btnIn').style.display='none';
     document.getElementById('btnShop').style.display='none';
+  }
+  // สรุปยอดขาย = เรื่องเงิน เห็นเฉพาะแอดมิน
+  if(u.role==='แอดมิน'){
+    document.getElementById('btnSales').style.display='flex';
   }
   loadDash();
 });

@@ -270,7 +270,7 @@ function installTriggers() {
 function doGet(e) {
   var page = (e && e.parameter && e.parameter.page) || 'index';
   var allow = { index: 'Index', stockin: 'StockIn', toshop: 'ToShop', count: 'Count',
-                waste: 'Waste', pos: 'Pos', report: 'Report' };
+                waste: 'Waste', sales: 'Sales' };
   var file = allow[page] || 'Index';
   return HtmlService.createTemplateFromFile(file).evaluate()
     .setTitle('ระบบสต็อกครัวกลางหม่าล่า')
@@ -618,14 +618,14 @@ function submitWaste(p) {
     var total = toBase_(p.packs, p.rem, it.perPack);
     if (!(total > 0)) throw new Error('กรุณากรอกจำนวนของเสีย');
 
-    var kind = (String(p.kind || '') === OUT_FREE) ? OUT_FREE : OUT_WASTE;
+    var kind = OUT_WASTE;   // หน้าเว็บบันทึกได้เฉพาะของเสีย
     SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.WASTE).appendRow([
       today_(), loc, kind, it.name, Math.floor(Number(p.packs) || 0), Number(p.rem) || 0, total,
       String(p.reason || ''), sess.name
     ]);
 
     var line = linePush_(groupIdOf_(loc),
-      (kind === OUT_FREE ? '🎁 บันทึกของแถมฟรี — ' : '🗑️ บันทึกของเสีย — ') + loc + '\n' +
+      '🗑️ บันทึกของเสีย — ' + loc + '\n' +
       '• ' + it.name + '  ' + fmtPack_(total, it) + '\n' +
       (p.reason ? ('• สาเหตุ ' + p.reason + '\n') : '') +
       '• คงเหลือ ' + fmtPack_(balanceOf_(loc, it.name), it) + '\n' +
@@ -722,7 +722,7 @@ function submitCount(p) {
 
 /* ===================== API: ยอด POS ===================== */
 function submitPos(p) {
-  var sess = requireRole_(p && p.token, null);
+  var sess = requireRole_(p && p.token, [ROLE_ADMIN]);
   var loc = String(p.location || '').trim();
   if (!loc) throw new Error('กรุณาเลือกสถานที่');
   assertLocAllowed_(sess, loc);
@@ -744,9 +744,8 @@ function submitPos(p) {
  * ส่วนต่าง          = เงินเข้าจริง − ยอดที่ควรได้     (ติดลบ = เงินขาด/ของหาย)
  */
 function getLossReport(token, loc, from, to) {
-  var sess = getSession_(token);
+  requireRole_(token, [ROLE_ADMIN]);
   loc = String(loc || '').trim();
-  assertLocAllowed_(sess, loc);
   from = String(from || '').slice(0, 10);
   to   = String(to || '').slice(0, 10);
   if (!from || !to) throw new Error('กรุณาเลือกช่วงวันที่');
