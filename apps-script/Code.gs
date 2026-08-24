@@ -42,7 +42,7 @@ var SESSION_DAYS = 30;
 
 // หัวคอลัมน์ (ห้ามสลับลำดับ)
 var I_COLS  = ['สินค้า', 'หน่วยย่อย', 'หน่วยแพ็ค', 'หน่วยย่อยต่อแพ็ค', 'ราคาขาย/หน่วยย่อย',
-               'อายุเก็บ(วัน)', 'หมวด', 'หมายเหตุ'];
+               'อายุเก็บ(วัน)', 'เตือนเมื่อเหลือ(แพ็ค)', 'หมวด', 'หมายเหตุ'];
 var L_COLS  = ['สถานที่', 'ประเภท', 'LINE Group ID', 'เปิดใช้งาน'];
 var SI_COLS = ['รหัส', 'วันที่', 'สินค้า', 'แพ็ค', 'เศษ', 'รวม(หน่วยย่อย)', 'วันหมดอายุ',
                'ผู้บันทึก', 'หมายเหตุ', 'แจ้งหมดอายุแล้ว'];
@@ -60,56 +60,56 @@ var UNIT_SUB  = ['ไม้', 'กรัม', 'ชิ้น'];   // หน่ว
 var UNIT_PACK = ['แพ็ค', 'ถุง'];           // หน่วยแพ็ค
 
 /**
- * สินค้าตั้งต้น — [ชื่อ, หน่วยย่อย, หน่วยแพ็ค, หน่วยย่อยต่อแพ็ค, ราคาขาย/หน่วยย่อย, อายุเก็บ(วัน), หมวด]
+ * สินค้าตั้งต้น — [ชื่อ, หน่วยย่อย, หน่วยแพ็ค, หน่วยย่อยต่อแพ็ค, ราคาขาย, อายุเก็บ, เตือนเมื่อเหลือ(แพ็ค), หมวด]
  * ⚠️ ราคาตั้งต้นเป็น 0 (ยังไม่ได้ตั้ง) — ต้องใส่ราคาจริงในชีต ไม่งั้นรายงานเช็คของหายคิดเงินไม่ได้
  * ⚠️ "หน่วยย่อยต่อแพ็ค" และ "อายุเก็บ" เป็นค่าเดา — ตรวจและแก้ให้ตรงกับที่ร้านใช้จริง
  */
 var DEFAULT_ITEMS = [
   // ---- ชั่งกรัม → ถุง ----
-  ['สันคอสไลด์',           'กรัม', 'ถุง',  30,  0,   3, 'เนื้อสัตว์'],
-  ['สามชั้นสไลด์',         'กรัม', 'ถุง',  30,  0,   3, 'เนื้อสัตว์'],
-  ['เนื้อแดง',             'กรัม', 'ถุง',  30,  0,   3, 'เนื้อสัตว์'],
-  ['หมึก',                 'กรัม', 'ถุง',  35,  0,   7, 'ทะเล'],
-  ['ปลาดอลลี่',            'กรัม', 'ถุง',  35,  0,   7, 'ทะเล'],
-  ['ปลาหมึกกรอบ',          'กรัม', 'ถุง',  35,  0,  10, 'ทะเล'],
-  ['แมงกะพรุน',            'กรัม', 'ถุง',  35,  0,  10, 'ทะเล'],
-  ['รากบัว',               'กรัม', 'ถุง',  50,  0,  15, 'ผัก'],
-  ['ผักกาดขาว',            'กรัม', 'ถุง', 100,  0,   3, 'ผัก'],
-  ['กะหล่ำ',               'กรัม', 'ถุง', 100,  0,   3, 'ผัก'],
-  ['ผักบุ้ง',              'กรัม', 'ถุง', 100,  0,   2, 'ผัก'],
-  ['กวางตุ้ง',             'กรัม', 'ถุง',  50,  0,   2, 'ผัก'],
-  ['เห็ดเข็มทอง',          'กรัม', 'ถุง',  50,  0,   5, 'ผัก'],
-  ['เห็ดชิเมจิ',           'กรัม', 'ถุง',  50,  0,   5, 'ผัก'],
-  ['ข้าวโพด',              'กรัม', 'ถุง',  25,  0,   5, 'ผัก'],
-  ['สาหร่าย',              'กรัม', 'ถุง',   5,  0,   7, 'ผัก'],
-  ['เส้นมันเทศ',           'กรัม', 'ถุง',  55,  0,  14, 'เส้น/แป้ง'],
-  ['เส้นอุด้ง',            'กรัม', 'ถุง',  50,  0,  14, 'เส้น/แป้ง'],
+  ['สันคอสไลด์',           'กรัม', 'ถุง',  30,  0,   3,  10, 'เนื้อสัตว์'],
+  ['สามชั้นสไลด์',         'กรัม', 'ถุง',  30,  0,   3,  10, 'เนื้อสัตว์'],
+  ['เนื้อแดง',             'กรัม', 'ถุง',  30,  0,   3,  10, 'เนื้อสัตว์'],
+  ['หมึก',                 'กรัม', 'ถุง',  35,  0,   7,  10, 'ทะเล'],
+  ['ปลาดอลลี่',            'กรัม', 'ถุง',  35,  0,   7,  10, 'ทะเล'],
+  ['ปลาหมึกกรอบ',          'กรัม', 'ถุง',  35,  0,  10,  10, 'ทะเล'],
+  ['แมงกะพรุน',            'กรัม', 'ถุง',  35,  0,  10,  10, 'ทะเล'],
+  ['รากบัว',               'กรัม', 'ถุง',  50,  0,  15,  10, 'ผัก'],
+  ['ผักกาดขาว',            'กรัม', 'ถุง', 100,  0,   3,  10, 'ผัก'],
+  ['กะหล่ำ',               'กรัม', 'ถุง', 100,  0,   3,  10, 'ผัก'],
+  ['ผักบุ้ง',              'กรัม', 'ถุง', 100,  0,   2,  10, 'ผัก'],
+  ['กวางตุ้ง',             'กรัม', 'ถุง',  50,  0,   2,  10, 'ผัก'],
+  ['เห็ดเข็มทอง',          'กรัม', 'ถุง',  50,  0,   5,  10, 'ผัก'],
+  ['เห็ดชิเมจิ',           'กรัม', 'ถุง',  50,  0,   5,  10, 'ผัก'],
+  ['ข้าวโพด',              'กรัม', 'ถุง',  25,  0,   5,  10, 'ผัก'],
+  ['สาหร่าย',              'กรัม', 'ถุง',   5,  0,   7,  10, 'ผัก'],
+  ['เส้นมันเทศ',           'กรัม', 'ถุง',  55,  0,  14,  10, 'เส้น/แป้ง'],
+  ['เส้นอุด้ง',            'กรัม', 'ถุง',  50,  0,  14,  10, 'เส้น/แป้ง'],
 
   // ---- เสียบไม้ → แพ็ค (7 ไม้/แพ็ค เป็นค่าตั้งต้น ตรวจสอบด้วย) ----
-  ['สันนอกห่อชีส',         'ไม้',  'แพ็ค',  7,  0,   3, 'เสียบไม้'],
-  ['สามชั้นพันเห็ดเข็ม',   'ไม้',  'แพ็ค',  7,  0,   3, 'เสียบไม้'],
-  ['สามชั้นพันสาหร่าย',    'ไม้',  'แพ็ค',  7,  0,   3, 'เสียบไม้'],
-  ['เต้าหู้ชีส',           'ไม้',  'แพ็ค',  7,  0,   7, 'เสียบไม้'],
-  ['ชีสหลายสี',            'ไม้',  'แพ็ค',  7,  0,   7, 'เสียบไม้'],
-  ['กุ้งพันสาหร่าย',       'ไม้',  'แพ็ค',  7,  0,   7, 'เสียบไม้'],
-  ['ไส้กรอกพันเบคอน',      'ไม้',  'แพ็ค',  7,  0,   7, 'เสียบไม้'],
-  ['ฟองเต้าหู้สามเหลี่ยม', 'ไม้',  'แพ็ค',  7,  0,   7, 'เสียบไม้'],
-  ['ปูอัด',                'ไม้',  'แพ็ค',  7,  0,   7, 'เสียบไม้'],
-  ['ไส้กรอกหนังกรอบ',      'ไม้',  'แพ็ค',  7,  0,   7, 'เสียบไม้'],
-  ['ไส้กรอกชมพู',          'ไม้',  'แพ็ค',  7,  0,   7, 'เสียบไม้'],
-  ['ต็อก (แป้งต็อก)',      'ไม้',  'แพ็ค',  7,  0,  15, 'เสียบไม้'],
-  ['เต้าหู้หมู',           'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
-  ['เต้าหู้หลอด',          'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
-  ['ปูอัดชีส',             'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
-  ['ปูอัดยาว',             'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
-  ['เต้าหู้ปลาแผ่น',       'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
-  ['ฟองเต้าหู้',           'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
-  ['เห็ดออรินจิ',          'ไม้',  'แพ็ค',  7,  0,   5, 'เสียบไม้'],
+  ['สันนอกห่อชีส',         'ไม้',  'แพ็ค',  7,  0,   3,  10, 'เสียบไม้'],
+  ['สามชั้นพันเห็ดเข็ม',   'ไม้',  'แพ็ค',  7,  0,   3,  10, 'เสียบไม้'],
+  ['สามชั้นพันสาหร่าย',    'ไม้',  'แพ็ค',  7,  0,   3,  10, 'เสียบไม้'],
+  ['เต้าหู้ชีส',           'ไม้',  'แพ็ค',  7,  0,   7,  10, 'เสียบไม้'],
+  ['ชีสหลายสี',            'ไม้',  'แพ็ค',  7,  0,   7,  10, 'เสียบไม้'],
+  ['กุ้งพันสาหร่าย',       'ไม้',  'แพ็ค',  7,  0,   7,  10, 'เสียบไม้'],
+  ['ไส้กรอกพันเบคอน',      'ไม้',  'แพ็ค',  7,  0,   7,  10, 'เสียบไม้'],
+  ['ฟองเต้าหู้สามเหลี่ยม', 'ไม้',  'แพ็ค',  7,  0,   7,  10, 'เสียบไม้'],
+  ['ปูอัด',                'ไม้',  'แพ็ค',  7,  0,   7,  10, 'เสียบไม้'],
+  ['ไส้กรอกหนังกรอบ',      'ไม้',  'แพ็ค',  7,  0,   7,  10, 'เสียบไม้'],
+  ['ไส้กรอกชมพู',          'ไม้',  'แพ็ค',  7,  0,   7,  10, 'เสียบไม้'],
+  ['ต็อก (แป้งต็อก)',      'ไม้',  'แพ็ค',  7,  0,  15,  10, 'เสียบไม้'],
+  ['เต้าหู้หมู',           'ไม้',  'แพ็ค',  7,  0,   5,  10, 'เสียบไม้'],
+  ['เต้าหู้หลอด',          'ไม้',  'แพ็ค',  7,  0,   5,  10, 'เสียบไม้'],
+  ['ปูอัดชีส',             'ไม้',  'แพ็ค',  7,  0,   5,  10, 'เสียบไม้'],
+  ['ปูอัดยาว',             'ไม้',  'แพ็ค',  7,  0,   5,  10, 'เสียบไม้'],
+  ['เต้าหู้ปลาแผ่น',       'ไม้',  'แพ็ค',  7,  0,   5,  10, 'เสียบไม้'],
+  ['ฟองเต้าหู้',           'ไม้',  'แพ็ค',  7,  0,   5,  10, 'เสียบไม้'],
+  ['เห็ดออรินจิ',          'ไม้',  'แพ็ค',  7,  0,   5,  10, 'เสียบไม้'],
 
   // ---- นับชิ้น → ถุง ----
-  ['ควิซ',                 'ชิ้น', 'ถุง',   1,  0,   7, 'แปรรูป'],
-  ['วุ้นเส้นหม่าล่า',      'ชิ้น', 'ถุง',   1,  0,  30, 'เส้น/แป้ง'],
-  ['มาม่า (ทุกชนิด)',      'ชิ้น', 'ถุง',   1,  0,  90, 'เส้น/แป้ง']
+  ['ควิซ',                 'ชิ้น', 'ถุง',   1,  0,   7,  10, 'แปรรูป'],
+  ['วุ้นเส้นหม่าล่า',      'ชิ้น', 'ถุง',   1,  0,  30,  10, 'เส้น/แป้ง'],
+  ['มาม่า (ทุกชนิด)',      'ชิ้น', 'ถุง',   1,  0,  90,  10, 'เส้น/แป้ง']
 ];
 
 /* ===================== เมนู ===================== */
@@ -125,6 +125,7 @@ function onOpen() {
     .addSeparator()
     .addItem('🧪 ทดสอบส่ง LINE ทุกกลุ่ม', 'testLineAll')
     .addItem('⏰ ทดสอบแจ้งวันหมดอายุเดี๋ยวนี้', 'checkExpiryDaily')
+    .addItem('⚠️ ทดสอบเตือนของใกล้หมดเดี๋ยวนี้', 'testLowStock')
     .addItem('🔒 บังคับล็อกอินใหม่ทุกคน', 'logoutEveryone')
     .addItem('แสดงลิงก์เว็บแอป', 'showWebAppUrl')
     .addToUi();
@@ -214,7 +215,7 @@ function writeItemsSheet_() {
     .setFontWeight('bold').setBackground('#c0392b').setFontColor('#ffffff');
   sh.setFrozenRows(1);
   var rows = DEFAULT_ITEMS.map(function (r) {
-    return [r[0], r[1], r[2], r[3], r[4], r[5], r[6], 'ตรวจสอบตัวเลข+ใส่ราคา'];
+    return [r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], 'ตรวจสอบตัวเลข+ใส่ราคา'];
   });
   sh.getRange(2, 1, rows.length, I_COLS.length).setValues(rows);
   sh.setColumnWidth(1, 190);
@@ -254,9 +255,15 @@ function installTriggers() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'checkExpiryDaily') ScriptApp.deleteTrigger(t);
   });
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'lowStockDaily') ScriptApp.deleteTrigger(t);
+  });
   ScriptApp.newTrigger('checkExpiryDaily').timeBased().atHour(8).everyDays(1).create();
-  SpreadsheetApp.getUi().alert('เปิดแจ้งเตือนวันหมดอายุแล้ว ✅\n\nระบบจะเช็คทุกวันช่วง 8:00–9:00 น.\n' +
-    'แจ้งเฉพาะของที่หมดอายุ "วันนี้" และแจ้งครั้งเดียวไม่ซ้ำ');
+  ScriptApp.newTrigger('lowStockDaily').timeBased().atHour(8).everyDays(1).create();
+  SpreadsheetApp.getUi().alert('เปิดแจ้งเตือนอัตโนมัติแล้ว ✅\n\n' +
+    '⏰ วันหมดอายุ — เช็คทุกวันช่วง 8:00–9:00 น. แจ้งเฉพาะของที่หมดอายุ "วันนี้" ครั้งเดียว\n' +
+    '⚠️ ของใกล้หมด — สรุปของครัวกลางที่ต่ำกว่าจุดเตือน ทุกเช้า\n\n' +
+    '(ระหว่างวัน ถ้าของตกลงต่ำกว่าจุดเตือน ระบบจะแจ้งทันทีด้วย)');
 }
 
 /* ===================== เว็บ ===================== */
@@ -373,7 +380,8 @@ function getItems_() {
         perPack: Number(r[3]) || 0,
         price: Number(r[4]) || 0,
         shelfDays: Number(r[5]) || 0,
-        category: String(r[6] || '')
+        lowPacks: Number(r[6]) || 0,
+        category: String(r[7] || '')
       };
     });
 }
@@ -591,6 +599,7 @@ function submitToShop(p) {
 
     updateSummary();
     var central = centralName_();
+    checkLowStock_([it.name]);
     return { ok: true, text: fmtPack_(total, it), expiry: exp,
              centralLeft: fmtPack_(balanceOf_(central, it.name), it),
              lineSent: line.sent, lineMsg: line.msg };
@@ -623,6 +632,7 @@ function submitWaste(p) {
       '• โดย ' + sess.name);
 
     updateSummary();
+    if (loc === centralName_()) checkLowStock_([it.name]);
     return { ok: true, text: fmtPack_(total, it), kind: kind,
              balance: fmtPack_(balanceOf_(loc, it.name), it),
              lineSent: line.sent, lineMsg: line.msg };
@@ -691,6 +701,9 @@ function submitCount(p) {
     var line = linePush_(groupIdOf_(loc), msg);
 
     updateSummary();
+    if (adjust && loc === centralName_()) {
+      checkLowStock_(lines.map(function (l) { return l.item; }));
+    }
     return { ok: true, counted: rows.length, diffs: out, adjusted: adjust,
              lineSent: line.sent, lineMsg: line.msg };
   } finally { lock.releaseLock(); }
@@ -854,12 +867,20 @@ function getDashboard(token) {
   var locs = getLocations_().filter(function (l) { return l.active; });
   if (sess.role === ROLE_BRANCH) locs = locs.filter(function (l) { return l.name === sess.branch; });
 
+  var isCentralLoc = {};
+  getLocations_().forEach(function (l) { isCentralLoc[l.name] = (l.type === LOC_CENTRAL); });
   var stock = locs.map(function (l) {
     var m = b[l.name] || {};
     var rows = Object.keys(m).filter(function (k) { return Math.abs(m[k]) > 0.0001; })
       .map(function (k) {
-        var it = map[k] || { subUnit: '', packUnit: '', perPack: 0 };
-        return { item: k, base: m[k], text: fmtPack_(m[k], it), low: m[k] <= 0 };
+        var it = map[k] || { subUnit: '', packUnit: '', perPack: 0, lowPacks: 0 };
+        // ต่ำกว่าจุดเตือน (เฉพาะครัวกลาง ที่ตั้งจุดเตือนไว้)
+        var limit = (isCentralLoc[l.name] && it.lowPacks > 0)
+          ? it.lowPacks * (it.perPack > 0 ? it.perPack : 1) : null;
+        return { item: k, base: m[k], text: fmtPack_(m[k], it),
+                 low: m[k] <= 0,
+                 warn: limit !== null && m[k] > 0 && m[k] <= limit,
+                 limitText: limit !== null ? (it.lowPacks + ' ' + it.packUnit) : '' };
       });
     rows.sort(function (x, y) { return x.item.localeCompare(y.item, 'th'); });
     return { name: l.name, type: l.type, rows: rows };
@@ -944,6 +965,73 @@ function testLineAll() {
     return (r.sent ? '✅ ' : '❌ ') + l.name + (r.sent ? '' : ' — ' + r.msg);
   });
   ui.alert('ผลทดสอบส่ง LINE\n\n' + out.join('\n'));
+}
+
+/* ===================== เตือนของครัวกลางใกล้หมด ===================== */
+/**
+ * แจ้งเฉพาะตอน "ตกลงมาต่ำกว่าจุดเตือน" ครั้งเดียว ไม่แจ้งซ้ำทุกครั้งที่หยิบของ
+ * พอเติมของจนกลับขึ้นเหนือจุดเตือน ระบบจะรีเซ็ตให้เตือนใหม่ได้รอบหน้า
+ * ตั้งจุดเตือนที่ชีต "รายการสินค้า" คอลัมน์ "เตือนเมื่อเหลือ(แพ็ค)" — ใส่ 0 = ไม่เตือน
+ */
+function checkLowStock_(itemNames) {
+  var central = centralName_();
+  var map = {};
+  getItems_().forEach(function (i) { map[i.name] = i; });
+  var bal = balances_()[central] || {};
+  var props = PropertiesService.getScriptProperties();
+  var hits = [];
+
+  (itemNames || []).forEach(function (n) {
+    var it = map[n];
+    if (!it || !(it.lowPacks > 0)) return;
+    var limit = it.lowPacks * (it.perPack > 0 ? it.perPack : 1);
+    var have = Number(bal[n]) || 0;
+    var key = 'LOW_' + n;
+    var wasLow = props.getProperty(key) === '1';
+    var isLow = have <= limit;
+    if (isLow && !wasLow) { hits.push({ it: it, have: have, limit: limit }); props.setProperty(key, '1'); }
+    else if (!isLow && wasLow) { props.deleteProperty(key); }
+  });
+
+  if (!hits.length) return { sent: false };
+  var text = '⚠️ ของครัวกลางใกล้หมด\n' +
+    hits.map(function (h) {
+      return '• ' + h.it.name + '  เหลือ ' + fmtPack_(h.have, h.it) +
+             '  (จุดเตือน ' + h.it.lowPacks + ' ' + h.it.packUnit + ')';
+    }).join('\n') +
+    '\n\nเตรียมเสียบเพิ่มหรือสั่งของได้แล้ว';
+  return linePush_(groupIdOf_(central), text);
+}
+
+/** สรุปของใกล้หมดทั้งหมด (รันเองจากเมนู หรือตั้งเป็นทริกเกอร์รายวัน) */
+function lowStockDaily() {
+  var central = centralName_();
+  var items = getItems_();
+  var bal = balances_()[central] || {};
+  var low = items.filter(function (it) {
+    if (!(it.lowPacks > 0)) return false;
+    var limit = it.lowPacks * (it.perPack > 0 ? it.perPack : 1);
+    return (Number(bal[it.name]) || 0) <= limit;
+  });
+  if (!low.length) {
+    return linePush_(groupIdOf_(central), '✅ สรุปสต็อกครัวกลาง (' + thaiDate_(today_()) + ')\nไม่มีของต่ำกว่าจุดเตือน');
+  }
+  low.sort(function (a, b) {
+    return (Number(bal[a.name]) || 0) / (a.perPack || 1) - (Number(bal[b.name]) || 0) / (b.perPack || 1);
+  });
+  var text = '⚠️ สรุปของครัวกลางใกล้หมด (' + thaiDate_(today_()) + ')\n' +
+    low.slice(0, 25).map(function (it) {
+      return '• ' + it.name + '  เหลือ ' + fmtPack_(Number(bal[it.name]) || 0, it) +
+             '  (จุดเตือน ' + it.lowPacks + ' ' + it.packUnit + ')';
+    }).join('\n') +
+    (low.length > 25 ? ('\n… และอีก ' + (low.length - 25) + ' รายการ') : '');
+  return linePush_(groupIdOf_(central), text);
+}
+
+/** เมนู: ทดสอบสรุปของใกล้หมดเดี๋ยวนี้ */
+function testLowStock() {
+  var r = lowStockDaily();
+  SpreadsheetApp.getUi().alert(r.sent ? 'ส่งเข้ากลุ่มครัวกลางแล้ว ✅' : ('ส่งไม่ได้: ' + r.msg));
 }
 
 /* ===================== แจ้งวันหมดอายุ (รันอัตโนมัติทุกวัน) ===================== */

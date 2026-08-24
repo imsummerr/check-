@@ -69,9 +69,11 @@ function loadDash(){
         '<span class="pill">'+esc(L.type)+'</span>'+esc(L.name)+'</div>'+
         '<div class="tablewrap"><table><tbody>'+
         L.rows.map(function(r){
-          return '<tr><td>'+esc(r.item)+'</td><td style="text-align:right">'+
-            (r.low ? '<span class="danger">' : '<strong>')+esc(r.text)+
-            (r.low ? '</span>' : '</strong>')+'</td></tr>';
+          var cell = r.low  ? '<span class="danger">'+esc(r.text)+'</span>'
+                   : r.warn ? '<span class="warn"><strong>'+esc(r.text)+'</strong></span>'+
+                              '<div class="sys warn">⚠️ ต่ำกว่าจุดเตือน '+esc(r.limitText)+'</div>'
+                   : '<strong>'+esc(r.text)+'</strong>';
+          return '<tr><td>'+esc(r.item)+'</td><td style="text-align:right">'+cell+'</td></tr>';
         }).join('')+'</tbody></table></div></div>';
     }).join('');
   }).withFailureHandler(function(e){
