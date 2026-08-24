@@ -16,7 +16,9 @@
   <div class="card">
     <label for="loc">นับที่ไหน *</label>
     <select id="loc"></select>
-    <p class="hint">กรอกเฉพาะรายการที่นับ — เว้นว่างไว้ = ไม่ได้นับ ระบบจะไม่แตะยอดนั้น</p>
+    <p class="hint">ต้องนับให้ครบทุกรายการ — ถ้าไม่มีของเหลือให้ใส่ <strong>0</strong>
+      (ยอดในระบบจะถูกปรับให้ตรงกับที่นับได้)</p>
+    <div class="callout" id="progress" style="display:none"></div>
   </div>
 
   <div class="card">
@@ -32,17 +34,7 @@
   </div>
 
   <div class="card">
-    <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin:0">
-      <input type="checkbox" id="adjust" checked style="width:19px;height:19px;margin-top:2px;accent-color:var(--red)">
-      <span style="font-size:14.5px; color:var(--text); font-weight:400">
-        ปรับสต็อกในระบบให้ตรงกับที่นับได้
-        <span class="muted" style="display:block; font-size:12.5px">
-          ถ้าไม่ติ๊ก ระบบจะบันทึกส่วนต่างไว้ดูเฉย ๆ ไม่แก้ยอด</span>
-      </span>
-    </label>
-    <div style="margin-top:16px">
-      <button class="btn btn-primary" id="submitBtn" type="button">บันทึกผลนับ + แจ้งกลุ่ม</button>
-    </div>
+    <button class="btn btn-primary" id="submitBtn" type="button">บันทึกผลนับ + แจ้งกลุ่ม</button>
   </div>
 
   <div class="center"><a class="link" href="?page=index">← กลับหน้าแรก</a></div>
@@ -64,19 +56,47 @@ function touched(r){
 
 function paintRow(r){
   var cell=document.getElementById('d_'+r.i);
-  if(!touched(r)){ cell.innerHTML='<span class="muted">ยังไม่นับ</span>'; return; }
+  var tr=document.getElementById('tr_'+r.i);
+  if(!touched(r)){
+    cell.innerHTML='<span class="diff danger">ยังไม่นับ</span>';
+    if(tr) tr.style.background='';
+    paintProgress();
+    return;
+  }
+  if(tr) tr.style.background='';
   var diff=rowTotal(r)-r.sysBase;
-  if(diff===0){ cell.innerHTML='<span class="diff ok">ตรง ✓</span>'; return; }
-  var t=fmtPack(Math.abs(diff), r);
-  cell.innerHTML = diff<0
-    ? '<span class="diff danger">ขาด '+t+'</span>'
-    : '<span class="diff warn">เกิน '+t+'</span>';
+  if(diff===0){
+    cell.innerHTML='<span class="diff ok">ตรง ✓</span>';
+  } else {
+    var t=fmtPack(Math.abs(diff), r);
+    cell.innerHTML = diff<0
+      ? '<span class="diff danger">ขาด '+t+'</span>'
+      : '<span class="diff warn">เกิน '+t+'</span>';
+  }
+  paintProgress();
+}
+
+/** ตัวนับความคืบหน้า + สถานะปุ่ม */
+function paintProgress(){
+  var box=document.getElementById('progress');
+  var done=ROWS.filter(touched).length, all=ROWS.length;
+  var btn=document.getElementById('submitBtn');
+  if(!all){ box.style.display='none'; return; }
+  box.style.display='block';
+  if(done===all){
+    box.innerHTML='<strong class="ok">✅ นับครบแล้ว '+all+' รายการ</strong>';
+    btn.disabled=false; btn.style.opacity='';
+  } else {
+    box.innerHTML='นับแล้ว <strong>'+done+'</strong> จาก '+all+' รายการ'+
+      '<div class="muted" style="font-size:13px">เหลืออีก '+(all-done)+' รายการ — ถ้าไม่มีของให้ใส่ 0</div>';
+    btn.disabled=true; btn.style.opacity='.5';
+  }
 }
 
 function render(rows){
   ROWS=rows.map(function(r,i){ r.i=i; return r; });
   document.getElementById('tb').innerHTML=ROWS.map(function(r){
-    return '<tr>'+
+    return '<tr id="tr_'+r.i+'">'+
       '<td><strong>'+esc(r.name)+'</strong>'+
         '<div class="sys">ระบบ: '+esc(r.sysText)+'</div></td>'+
       '<td style="white-space:nowrap; text-align:right">'+
@@ -97,6 +117,8 @@ function render(rows){
   });
   document.getElementById('loading').style.display = ROWS.length ? 'none' : 'block';
   if(!ROWS.length) document.getElementById('loading').textContent='ยังไม่มีสินค้าในระบบ';
+  ROWS.forEach(paintRow);
+  paintProgress();
 }
 
 function loadRows(){
@@ -121,25 +143,35 @@ function load(){
 document.getElementById('loc').addEventListener('change', loadRows);
 
 document.getElementById('submitBtn').addEventListener('click', function(){
-  var lines=ROWS.filter(touched).map(function(r){
+  var miss=ROWS.filter(function(r){ return !touched(r); });
+  if(miss.length){
+    miss.forEach(function(r){
+      var tr=document.getElementById('tr_'+r.i);
+      if(tr) tr.style.background='#fdeeea';
+    });
+    var first=document.getElementById('tr_'+miss[0].i);
+    if(first) first.scrollIntoView({block:'center', behavior:'smooth'});
+    toast('ยังนับไม่ครบ เหลืออีก '+miss.length+' รายการ<br>ถ้าไม่มีของเหลือให้ใส่ 0', 5000);
+    return;
+  }
+  var lines=ROWS.map(function(r){
     return { item:r.name,
              packs:document.getElementById('p_'+r.i).value,
              rem:document.getElementById('r_'+r.i).value };
   });
-  if(!lines.length){ toast('ยังไม่ได้กรอกยอดนับสักรายการ'); return; }
   var btn=this;
   busy(btn,true,'กำลังบันทึก...');
   google.script.run.withSuccessHandler(function(r){
     busy(btn,false,'บันทึกผลนับ + แจ้งกลุ่ม');
-    var msg='บันทึกแล้ว ✅ นับ '+r.counted+' รายการ<br>'+
-      (r.diffs.length ? ('⚠️ ไม่ตรง '+r.diffs.length+' รายการ') : 'ตรงกับระบบทั้งหมด 🎉');
+    var msg='บันทึกแล้ว ✅ นับครบ '+r.counted+' รายการ<br>'+
+      (r.diffs.length ? ('⚠️ ไม่ตรง '+r.diffs.length+' รายการ — ปรับยอดให้แล้ว')
+                      : 'ตรงกับระบบทั้งหมด 🎉');
     toast(msg+'<br>'+(r.lineSent?'แจ้งกลุ่มแล้ว':'⚠️ '+r.lineMsg), 6000);
     loadRows();
   }).withFailureHandler(function(err){
     busy(btn,false,'บันทึกผลนับ + แจ้งกลุ่ม');
     if(!authExpired(err)) toast('ผิดพลาด: '+err.message,5000);
-  }).submitCount({ token:AUTH.token, location:val('loc'),
-    adjust:document.getElementById('adjust').checked, lines:lines });
+  }).submitCount({ token:AUTH.token, location:val('loc'), lines:lines });
 });
 
 authInit(function(u){ authBar(u); load(); });

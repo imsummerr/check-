@@ -665,11 +665,21 @@ function submitCount(p) {
   var lines = (p.lines || []).filter(function (l) { return l && l.item; });
   if (!lines.length) throw new Error('ยังไม่ได้กรอกยอดนับสักรายการ');
 
+  // ต้องนับให้ครบทุกรายการ — กันนับตกหล่นแล้วยอดเพี้ยน
+  var got = {};
+  lines.forEach(function (l) { got[String(l.item).trim()] = true; });
+  var missing = getItems_().map(function (i) { return i.name; })
+    .filter(function (n) { return !got[n]; });
+  if (missing.length) {
+    throw new Error('ต้องนับให้ครบทุกรายการ ยังขาดอีก ' + missing.length + ' รายการ:\n• ' +
+                    missing.slice(0, 10).join('\n• ') +
+                    (missing.length > 10 ? ('\n… และอีก ' + (missing.length - 10)) : ''));
+  }
+
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     var b = balances_()[loc] || {};
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.COUNT);
-    var adjust = p.adjust !== false;
     var date = today_(), out = [], rows = [];
 
     lines.forEach(function (l) {
@@ -677,7 +687,7 @@ function submitCount(p) {
       var counted = toBase_(l.packs, l.rem, it.perPack);
       var sys = Number(b[it.name]) || 0;
       var diff = counted - sys;
-      rows.push([date, loc, it.name, sys, counted, diff, adjust, sess.name, String(l.note || '')]);
+      rows.push([date, loc, it.name, sys, counted, diff, true, sess.name, String(l.note || '')]);
       if (diff !== 0) {
         out.push({ item: it.name, sysText: fmtPack_(sys, it), countText: fmtPack_(counted, it),
                    diff: diff, diffText: fmtPack_(Math.abs(diff), it), short: diff < 0 });
@@ -691,6 +701,7 @@ function submitCount(p) {
     if (!out.length) {
       msg += '✅ ตรงกับระบบทั้งหมด';
     } else {
+      msg += '(ปรับยอดในระบบให้ตรงกับที่นับแล้ว)\n';
       msg += '⚠️ ไม่ตรง ' + out.length + ' รายการ\n' +
         out.slice(0, 12).map(function (o) {
           return (o.short ? '  ▼ ขาด ' : '  ▲ เกิน ') + o.diffText + ' — ' + o.item +
@@ -701,10 +712,10 @@ function submitCount(p) {
     var line = linePush_(groupIdOf_(loc), msg);
 
     updateSummary();
-    if (adjust && loc === centralName_()) {
+    if (loc === centralName_()) {
       checkLowStock_(lines.map(function (l) { return l.item; }));
     }
-    return { ok: true, counted: rows.length, diffs: out, adjusted: adjust,
+    return { ok: true, counted: rows.length, diffs: out, adjusted: true,
              lineSent: line.sent, lineMsg: line.msg };
   } finally { lock.releaseLock(); }
 }
