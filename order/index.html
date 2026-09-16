@@ -474,6 +474,13 @@
     </div>
     <p class="hint">ปักหมุดให้ตรงจุด ระบบจะคำนวณค่าส่งจากระยะทางให้ทันที</p>
 
+    <div style="display:flex;gap:7px;margin-top:9px;">
+      <input class="input" id="mapLink" type="text" style="flex:1;min-width:0;"
+             placeholder="หรือวางลิงก์ Google Maps ที่แชร์มา">
+      <button type="button" class="btn-ghost key" style="white-space:nowrap;"
+              onclick="useMapLink()">ใช้ลิงก์</button>
+    </div>
+
     <div id="map" class="hidden"></div>
     <p class="hint hidden" id="map-hint">แตะบนแผนที่หรือลากหมุดสีแดงไปยังจุดที่ต้องการให้ไปส่ง</p>
     <div id="pin-box" class="pin-box hidden"></div>
@@ -489,6 +496,7 @@
       </div>
       <p class="dist-note" id="dist-note"></p>
     </div>
+    <p class="hint" id="shop-addr"></p>
 
     <label class="field-label" for="addrNote" style="margin-top:14px;">จุดสังเกต / รายละเอียดเพิ่มเติม</label>
     <input class="input" id="addrNote" type="text" placeholder="เช่น ตึกสีเทา ตรงข้ามร้านกาแฟ ฝากไว้ที่ รปภ. ได้">
@@ -961,6 +969,8 @@ var PromptPay = (function () {
 const SHOP = {
   name:        'ตลาดทรัพย์พัฒนา',
   shopName:    'หม่าล่าหน้าแดง',
+  // ใช้แสดงให้ลูกค้าเห็นว่าส่งออกจากไหน และเป็นคำค้นตั้งต้นในโหมด ?setshop=1
+  address:     'ตลาดทรัพย์พัฒนา อ.เมืองสมุทรปราการ จ.สมุทรปราการ',
   promptpayId: '004999124195842',   // ชุดเดียวกับ DEFAULT_BRANCH_QR ใน pos.html
   lat: null,
   lng: null
@@ -1114,6 +1124,31 @@ function deliveryFee(km) {
   const over = km - DELIVERY.freeKm;
   if (over <= 0) return 0;
   return Math.ceil(over - 1e-9) * DELIVERY.bahtPerKm;
+}
+
+/**
+ * แกะพิกัดออกจากสิ่งที่วางมา — รองรับลิงก์ Google Maps ทุกแบบที่เจอบ่อย
+ * และตัวเลข "13.123456, 100.123456" ล้วน ๆ
+ * คืน { lat, lng } · { short: true } ถ้าเป็นลิงก์ย่อที่ยังกางไม่ได้ · null ถ้าอ่านไม่ออก
+ */
+function parseLatLng(text) {
+  const s = String(text || '').trim();
+  if (!s) return null;
+  // ลิงก์ย่อ (maps.app.goo.gl) ไม่มีพิกัดอยู่ในตัว ต้องให้เปิดก่อนแล้วค่อยก๊อบลิงก์เต็ม
+  if (/(maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(s)) return { short: true };
+  const pats = [
+    /!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/,                                  // หมุดจริงในลิงก์ /place/
+    /[?&](?:q|query|ll|center|daddr|destination)=(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/i,
+    /@(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/,                                  // จุดกลางจอ
+    /^(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$/                              // ตัวเลขล้วน
+  ];
+  for (const re of pats) {
+    const m = s.match(re);
+    if (!m) continue;
+    const lat = parseFloat(m[1]), lng = parseFloat(m[2]);
+    if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
+  }
+  return null;
 }
 
 /** ระยะทางเส้นตรงระหว่างสองพิกัด (กม.) */
@@ -1377,6 +1412,7 @@ function distanceReason() {
 function updateDistance() {
   const box = $('dist-box'), kmEl = $('dist-km'), feeEl = $('dist-fee'), note = $('dist-note');
   $('dist-label').textContent = 'ระยะทางจาก' + SHOP.name;
+  $('shop-addr').textContent = SHOP.address ? '🏪 ส่งออกจาก ' + SHOP.address : '';
 
   if (!shopHasPin()) {
     state.km = null;
@@ -1556,6 +1592,24 @@ async function geocodeAddress() {
     toast('ค้นหาที่อยู่ไม่สำเร็จ — ปักหมุดเองบนแผนที่ได้เลย', true);
   }
   btn.disabled = false; btn.textContent = '🔎 ค้นหาจากที่อยู่';
+}
+
+/** ลูกค้าวางลิงก์ Google Maps ที่แชร์มา แล้วปักหมุดให้เลย */
+function useMapLink() {
+  const raw = $('mapLink').value;
+  const got = parseLatLng(raw);
+  if (!got) {
+    toast(raw.trim() ? 'อ่านพิกัดจากลิงก์นี้ไม่ได้ — ปักหมุดเองได้เลย' : 'วางลิงก์ Google Maps ก่อน', true);
+    return;
+  }
+  if (got.short) {
+    toast('ลิงก์ย่อ — กดเปิดลิงก์ก่อน แล้วคัดลอกลิงก์เต็มจากช่อง URL มาวางแทน', true);
+    return;
+  }
+  showMap();
+  loadLeaflet(() => { initMap(); setPin(got.lat, got.lng, true); });
+  setPin(got.lat, got.lng, true);
+  toast('ปักหมุดจากลิงก์ให้แล้ว — ลากปรับได้');
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1836,7 +1890,7 @@ function resetForm() {
   state.soup = state.spice = state.sauce = '';
   document.querySelectorAll('.chip-grid .chip').forEach(c => c.classList.remove('on'));
   document.querySelectorAll('.chip-grid').forEach(g => g.classList.remove('missing'));
-  ['addrText', 'addrNote', 'remark'].forEach(id => $(id).value = '');
+  ['addrText', 'addrNote', 'remark', 'mapLink'].forEach(id => $(id).value = '');
   document.querySelectorAll('.input.error').forEach(el => el.classList.remove('error'));
   clearPin();
   $('slip-input').value = '';
@@ -1858,42 +1912,109 @@ function maybeShopSetup() {
       <div class="card card-pad">
         <h2 style="font-size:18px;font-weight:800;">📌 ตั้งพิกัดหน้าร้าน</h2>
         <p class="hint" style="margin-top:6px;">
-          จิ้มตำแหน่งหน้าร้านบนแผนที่ (ลากหมุดปรับได้) แล้วเอาตัวเลขที่ได้ไปวางแทนบรรทัด
-          <code>lat</code> กับ <code>lng</code> ใน <code>const SHOP</code> ของไฟล์ <code>index.html</code><br>
-          ทำครั้งเดียวตอนติดตั้ง ลูกค้าไม่เห็นหน้านี้
+          ทำครั้งเดียวตอนติดตั้ง ลูกค้าไม่เห็นหน้านี้ (ต้องพิมพ์ <code>?setshop=1</code> เอง)<br>
+          ไม่ตั้งพิกัด = ระบบจะไม่คิดค่าส่งให้ เพราะเดาแล้วค่าส่งจะผิดทุกบิล
         </p>
+
+        <label class="field-label" style="margin-top:16px;">วิธีที่ 1 — วางลิงก์ Google Maps (แม่นที่สุด)</label>
+        <p class="hint" style="margin-top:0;">
+          เปิด Google Maps → กดค้างที่หน้าร้าน → แชร์ → คัดลอกลิงก์ → วางตรงนี้<br>
+          ถ้าเป็นลิงก์ย่อ <code>maps.app.goo.gl</code> ให้กดเปิดก่อน แล้วค่อยคัดลอกลิงก์เต็มจากช่อง URL
+        </p>
+        <div style="display:flex;gap:7px;margin-top:7px;">
+          <input class="input" id="shop-link" type="text" style="flex:1;min-width:0;"
+                 placeholder="https://www.google.com/maps/place/...">
+          <button type="button" class="btn-ghost key" style="white-space:nowrap;"
+                  onclick="shopUseLink()">ใช้ลิงก์</button>
+        </div>
+
+        <label class="field-label" style="margin-top:16px;">วิธีที่ 2 — ค้นหาจากชื่อ/ที่อยู่ร้าน</label>
+        <div style="display:flex;gap:7px;margin-top:7px;">
+          <input class="input" id="shop-q" type="text" style="flex:1;min-width:0;"
+                 value="${esc(SHOP.address || SHOP.name)}">
+          <button type="button" class="btn-ghost key" style="white-space:nowrap;"
+                  id="shop-search-btn" onclick="shopSearch()">ค้นหา</button>
+        </div>
+
+        <label class="field-label" style="margin-top:16px;">วิธีที่ 3 — จิ้มบนแผนที่ (ลากหมุดปรับได้)</label>
         <div id="shop-map"></div>
-        <div class="snippet" id="shop-snippet">ยังไม่ได้จิ้มตำแหน่ง</div>
+
+        <div class="snippet" id="shop-snippet">ยังไม่ได้เลือกตำแหน่ง</div>
         <div class="btn-row">
           <button type="button" class="btn-dark key" style="flex:1;"
                   onclick="copyText(window.__shopLine || '', 'คัดลอกพิกัดแล้ว')">📋 คัดลอกไปวางในโค้ด</button>
           <button type="button" class="btn-ghost key" onclick="location.search = '';">ปิด</button>
         </div>
+        <p class="hint">
+          เอาสองบรรทัดที่คัดลอกไปวางแทน <code>lat: null</code> กับ <code>lng: null</code>
+          ใน <code>const SHOP</code> ของไฟล์ <code>index.html</code> แล้วเซฟ
+        </p>
       </div>
     </div>`;
   document.body.style.overflow = 'hidden';
 
   loadLeaflet(() => {
     const c = shopHasPin() ? SHOP : CONFIG.mapCenter;
-    const m = L.map('shop-map').setView([c.lat, c.lng], shopHasPin() ? 17 : CONFIG.mapCenter.zoom);
+    shopMap = L.map('shop-map').setView([c.lat, c.lng], shopHasPin() ? 17 : CONFIG.mapCenter.zoom);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '&copy; OpenStreetMap'
-    }).addTo(m);
-    let mk = null;
-    const put = (lat, lng) => {
-      const la = Number(lat.toFixed(6)), ln = Number(lng.toFixed(6));
-      if (!mk) {
-        mk = L.marker([la, ln], { draggable: true, icon: pinIcon('#0d0d0f') }).addTo(m);
-        mk.on('dragend', () => { const p = mk.getLatLng(); put(p.lat, p.lng); });
-      } else mk.setLatLng([la, ln]);
-      window.__shopLine = '  lat: ' + la + ',\n  lng: ' + ln;
-      $('shop-snippet').textContent =
-        'const SHOP = {\n  ...\n' + window.__shopLine + '\n};';
-    };
-    m.on('click', e => put(e.latlng.lat, e.latlng.lng));
-    if (shopHasPin()) put(SHOP.lat, SHOP.lng);
-    setTimeout(() => m.invalidateSize(), 80);
+    }).addTo(shopMap);
+    shopMap.on('click', e => shopPut(e.latlng.lat, e.latlng.lng, false));
+    if (shopHasPin()) shopPut(SHOP.lat, SHOP.lng, false);
+    setTimeout(() => shopMap.invalidateSize(), 80);
   });
+}
+
+let shopMap = null, shopMarker = null;
+
+/** วางหมุดร้านแล้วสร้างข้อความที่เอาไปวางในโค้ดได้เลย */
+function shopPut(lat, lng, recenter) {
+  const la = Number(Number(lat).toFixed(6)), ln = Number(Number(lng).toFixed(6));
+  window.__shopLine = '  lat: ' + la + ',\n  lng: ' + ln + ',';
+  $('shop-snippet').textContent = 'const SHOP = {\n  ...\n' + window.__shopLine + '\n};';
+  if (!shopMap || !window.L) return;
+  if (!shopMarker) {
+    shopMarker = L.marker([la, ln], { draggable: true, icon: pinIcon('#0d0d0f') }).addTo(shopMap);
+    shopMarker.on('dragend', () => { const q = shopMarker.getLatLng(); shopPut(q.lat, q.lng, false); });
+  } else {
+    shopMarker.setLatLng([la, ln]);
+  }
+  if (recenter) shopMap.setView([la, ln], Math.max(shopMap.getZoom(), 17));
+}
+
+function shopUseLink() {
+  const raw = $('shop-link').value;
+  const got = parseLatLng(raw);
+  if (!got) {
+    toast(raw.trim() ? 'อ่านพิกัดจากลิงก์นี้ไม่ได้' : 'วางลิงก์ Google Maps ก่อน', true);
+    return;
+  }
+  if (got.short) {
+    toast('ลิงก์ย่อ — กดเปิดลิงก์ก่อน แล้วคัดลอกลิงก์เต็มจากช่อง URL มาวางแทน', true);
+    return;
+  }
+  shopPut(got.lat, got.lng, true);
+  toast('ได้พิกัดจากลิงก์แล้ว');
+}
+
+async function shopSearch() {
+  const q = $('shop-q').value.trim();
+  if (!q) { toast('พิมพ์ชื่อหรือที่อยู่ร้านก่อน', true); return; }
+  const btn = $('shop-search-btn');
+  btn.disabled = true; btn.textContent = 'กำลังค้นหา...';
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1' +
+                '&countrycodes=th&accept-language=th&q=' + encodeURIComponent(q);
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const j = await res.json();
+    if (!Array.isArray(j) || !j.length) throw new Error('ไม่พบ');
+    shopPut(parseFloat(j[0].lat), parseFloat(j[0].lon), true);
+    toast('เจอแล้ว — ตรวจบนแผนที่แล้วลากปรับให้ตรงหน้าร้าน');
+  } catch {
+    toast('ค้นหาไม่เจอ — วางลิงก์ Google Maps หรือจิ้มบนแผนที่แทน', true);
+  }
+  btn.disabled = false; btn.textContent = 'ค้นหา';
 }
 
 /* ════════════════════════════════════════════════════════════
