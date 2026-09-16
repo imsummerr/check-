@@ -377,6 +377,39 @@
     .step-input { width: 40px; height: 30px; }
     .item-name { font-size: 13.5px; }
   }
+
+  /* ── กล่องระยะทาง / ค่าส่ง ── */
+  .dist-box {
+    margin-top: 11px; border: 1.5px solid var(--line);
+    border-radius: 12px; overflow: hidden;
+  }
+  .dist-row {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    padding: 10px 13px; font-size: 13.5px; border-bottom: 1px solid var(--line);
+  }
+  .dist-row:last-of-type { border-bottom: none; }
+  .dist-row b { font-size: 15px; }
+  .dist-row b.free { color: var(--ok); }
+  .dist-row b.paid { color: var(--red); }
+  .dist-box.ready { border-color: var(--red); }
+  .dist-box.ready .dist-row:first-child { background: var(--red-soft); }
+  .dist-note { padding: 9px 13px; font-size: 11.5px; color: var(--muted); line-height: 1.6; background: var(--bg); }
+
+  .notice.warn {
+    background: #fff8e6; border-color: #e6c15c; color: #7a5a10;
+  }
+  .item-warn { font-size: 11px; color: var(--red); margin-top: 1px; }
+
+  /* ── โหมดตั้งพิกัดร้าน (?setshop=1) ── */
+  .shop-setup { position: fixed; inset: 0; z-index: 950; background: var(--bg); overflow-y: auto; padding: 18px 14px 40px; }
+  .shop-setup .card-pad { max-width: 620px; margin: 0 auto; }
+  #shop-map { width: 100%; height: 340px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--paper); margin-top: 12px; }
+  .snippet {
+    background: var(--ink); color: #7ee8a8; border-radius: 11px;
+    padding: 12px 14px; margin-top: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-all;
+  }
 </style>
 </head>
 <body>
@@ -384,25 +417,42 @@
 <header>
   <span class="brand-mark">🌶️</span>
   <h1>หม่าล่า<span>หน้าแดง</span></h1>
-  <p>เลือกวัตถุดิบ · น้ำซุป · ความเผ็ด · น้ำจิ้ม แล้วส่งถึงบ้าน</p>
+  <p>เลือกวัตถุดิบ · น้ำซุป · น้ำจิ้ม แล้วส่งถึงบ้าน</p>
   <div class="header-note">
-    🔥 <strong>ลวกหรือย่างก็ได้</strong> — เลือกได้ทั้งสองแบบในบิลเดียว<br>
+    🔥 <strong>ลวกหรือย่างก็ได้</strong> — เลือกได้ที่ช่อง "น้ำซุป"<br>
     ครบทุก 10 ไม้ ลดทันที 5 บาท
   </div>
 </header>
 
 <div class="container">
 
-  <!-- ─────────── 1. สาขา ─────────── -->
+  <!-- ─────────── 1. วัตถุดิบ ─────────── -->
   <div class="card card-pad">
-    <label class="field-label"><span class="step">1</span> &nbsp;เลือกสาขาที่สั่ง <span class="req">*</span></label>
-    <div class="chip-grid" id="branch-chips"></div>
-    <p class="hint" id="branch-hint">สาขาที่เลือกจะเป็นเจ้าของ QR รับเงินและเป็นจุดที่ออกไปส่ง</p>
+    <label class="field-label"><span class="step">1</span> &nbsp;เลือกวัตถุดิบ <span class="req">*</span></label>
+    <p class="hint" style="margin-top:0;">กด + เพิ่มจำนวน หรือพิมพ์ตัวเลขลงช่องได้เลย</p>
+    <div id="menu-list"></div>
   </div>
 
-  <!-- ─────────── 2. ผู้สั่ง ─────────── -->
+  <!-- ─────────── 2. น้ำซุป + ความเผ็ด ─────────── -->
   <div class="card card-pad">
-    <label class="field-label" for="custName"><span class="step">2</span> &nbsp;ชื่อผู้สั่ง <span class="req">*</span></label>
+    <label class="field-label" id="head-soup"><span class="step">2</span> &nbsp;น้ำซุป / วิธีทำ <span class="req">*</span></label>
+    <div class="chip-grid" id="soup-chips"></div>
+    <p class="hint" id="soup-hint">อยากได้แบบย่าง เลือก "ย่าง" ในช่องนี้ได้เลย ไม่ต้องใส่น้ำซุป</p>
+
+    <label class="field-label" id="head-spice" style="margin-top:16px;">ระดับความเผ็ด <span class="req">*</span></label>
+    <div class="chip-grid" id="spice-chips"></div>
+  </div>
+
+  <!-- ─────────── 3. น้ำจิ้ม ─────────── -->
+  <div class="card card-pad">
+    <label class="field-label" id="head-sauce"><span class="step">3</span> &nbsp;น้ำจิ้ม <span class="req">*</span></label>
+    <div class="chip-grid" id="sauce-chips"></div>
+    <p class="hint">แถมฟรี 1 ถ้วยต่อบิล อยากได้เพิ่มพิมพ์บอกในหมายเหตุได้</p>
+  </div>
+
+  <!-- ─────────── 4. ผู้สั่ง ─────────── -->
+  <div class="card card-pad">
+    <label class="field-label" for="custName"><span class="step">4</span> &nbsp;ชื่อผู้สั่ง <span class="req">*</span></label>
     <input class="input" id="custName" type="text" placeholder="เช่น คุณฝน" autocomplete="name">
 
     <label class="field-label" for="custPhone" style="margin-top:14px;">เบอร์โทร <span class="req">*</span></label>
@@ -411,137 +461,43 @@
     <p class="hint">ใช้ติดต่อตอนไปส่งเท่านั้น</p>
   </div>
 
-  <!-- ─────────── 3. หม่าล่าลวก ─────────── -->
-  <div class="card">
-    <button class="cat-toggle" type="button" onclick="toggleCat('hotpot')">
-      <span class="cat-left">
-        <span class="cat-badge" id="badge-hotpot">0</span>
-        <span>🍲 หม่าล่าลวก (น้ำซุป)
-          <span class="cat-sub">เลือกน้ำซุป · ความเผ็ด · น้ำจิ้ม แล้วเลือกวัตถุดิบ</span>
-        </span>
-      </span>
-      <span class="cat-arrow" id="arrow-hotpot">▼</span>
-    </button>
-    <div class="cat-body" id="body-hotpot">
-      <div class="section-label" id="head-soup">น้ำซุป <span class="req">* ต้องเลือก</span></div>
-      <div class="chip-grid" id="soup-chips"></div>
-
-      <div class="section-label" id="head-spice">ระดับความเผ็ด <span class="req">* ต้องเลือก</span></div>
-      <div class="chip-grid" id="spice-chips"></div>
-
-      <div class="section-label" id="head-sauce">น้ำจิ้ม <span class="req">* ต้องเลือก</span></div>
-      <div class="chip-grid" id="sauce-chips"></div>
-      <p class="hint">น้ำจิ้มแถมฟรี 1 ถ้วยต่อบิล อยากได้เพิ่มพิมพ์บอกในหมายเหตุได้</p>
-
-      <div class="section-label">วัตถุดิบที่ต้องการลวก</div>
-      <div id="list-hotpot"></div>
-    </div>
-  </div>
-
-  <!-- ─────────── 4. หม่าล่าย่าง ─────────── -->
-  <div class="card">
-    <button class="cat-toggle" type="button" onclick="toggleCat('grill')">
-      <span class="cat-left">
-        <span class="cat-badge" id="badge-grill">0</span>
-        <span>🔥 หม่าล่าย่าง
-          <span class="cat-sub">ย่างเตาถ่าน โรยผงหม่าล่า ไม่ต้องใช้น้ำซุป</span>
-        </span>
-      </span>
-      <span class="cat-arrow" id="arrow-grill">▼</span>
-    </button>
-    <div class="cat-body" id="body-grill">
-      <div class="section-label" id="head-gspice">ความเผ็ด (ผงหม่าล่าที่โรย) <span class="req">* ต้องเลือก</span></div>
-      <div class="chip-grid" id="gspice-chips"></div>
-
-      <div class="section-label" id="head-gsauce">น้ำจิ้ม <span class="req">* ต้องเลือก</span></div>
-      <div class="chip-grid" id="gsauce-chips"></div>
-
-      <div class="section-label">วัตถุดิบที่ต้องการย่าง</div>
-      <p class="hint" style="margin:0 0 4px;">ผักใบและเส้นไม่เหมาะกับการย่าง จึงไม่ขึ้นในหมวดนี้</p>
-      <div id="list-grill"></div>
-    </div>
-  </div>
-
-  <!-- ─────────── 5. มาม่า ─────────── -->
-  <div class="card">
-    <button class="cat-toggle" type="button" onclick="toggleCat('mama')">
-      <span class="cat-left">
-        <span class="cat-badge" id="badge-mama">0</span>
-        <span>🍜 มาม่า / เส้น
-          <span class="cat-sub">เลือกตามราคาที่ต้องการ</span>
-        </span>
-      </span>
-      <span class="cat-arrow" id="arrow-mama">▼</span>
-    </button>
-    <div class="cat-body" id="body-mama">
-      <p class="hint" style="margin:12px 0 0;">มาม่าไม่นับรวมในส่วนลดทุก 10 ไม้</p>
-      <div id="list-mama"></div>
-    </div>
-  </div>
-
-  <!-- ─────────── 6. ของเพิ่ม ─────────── -->
-  <div class="card">
-    <button class="cat-toggle" type="button" onclick="toggleCat('extra')">
-      <span class="cat-left">
-        <span class="cat-badge" id="badge-extra">0</span>
-        <span>➕ ของเพิ่ม
-          <span class="cat-sub">ของแถมข้างเคียง</span>
-        </span>
-      </span>
-      <span class="cat-arrow" id="arrow-extra">▼</span>
-    </button>
-    <div class="cat-body" id="body-extra">
-      <div id="list-extra"></div>
-    </div>
-  </div>
-
-  <!-- ─────────── 7. เมนูจัดชุด ─────────── -->
-  <div class="card" id="card-set">
-    <button class="cat-toggle" type="button" onclick="toggleCat('set')">
-      <span class="cat-left">
-        <span class="cat-badge" id="badge-set">0</span>
-        <span>🍱 เมนูจัดชุด
-          <span class="cat-sub">ร้านจัดวัตถุดิบให้ ไม่ต้องเลือกเอง</span>
-        </span>
-      </span>
-      <span class="cat-arrow" id="arrow-set">▼</span>
-    </button>
-    <div class="cat-body" id="body-set">
-      <p class="hint" style="margin:12px 0 0;">ชุดจัดมาแล้ว แต่ยังเลือกน้ำซุป ความเผ็ด และน้ำจิ้มได้ที่หมวดหม่าล่าลวก</p>
-      <div id="list-set"></div>
-    </div>
-  </div>
-
-  <!-- ─────────── 8. ที่อยู่จัดส่ง ─────────── -->
+  <!-- ─────────── 5. ที่อยู่จัดส่ง + ค่าส่งตามระยะทาง ─────────── -->
   <div class="card card-pad">
-    <label class="field-label" for="addrText"><span class="step">3</span> &nbsp;ที่อยู่จัดส่ง <span class="req">*</span></label>
+    <label class="field-label" for="addrText"><span class="step">5</span> &nbsp;ที่อยู่จัดส่ง <span class="req">*</span></label>
     <textarea class="input" id="addrText"
       placeholder="บ้านเลขที่ / หมู่บ้าน / ซอย / ถนน / ตำบล / อำเภอ&#10;เช่น 99/12 หมู่บ้านสุขใจ ซอย 5 ถ.เทพารักษ์ ต.บางพลีใหญ่"></textarea>
 
     <div class="btn-row">
       <button type="button" class="btn-ghost key" id="btn-gps" onclick="useMyLocation()">📍 ใช้ตำแหน่งปัจจุบัน</button>
-      <button type="button" class="btn-ghost key" id="btn-map" onclick="toggleMap()">🗺️ ปักหมุดบนแผนที่</button>
+      <button type="button" class="btn-ghost key" id="btn-map" onclick="toggleMap()">🗺️ ปักหมุดเอง</button>
+      <button type="button" class="btn-ghost key" id="btn-geo" onclick="geocodeAddress()">🔎 ค้นหาจากที่อยู่</button>
     </div>
-    <p class="hint">พิมพ์ที่อยู่ก็ได้ ปักหมุดก็ได้ ทำทั้งสองอย่างคนส่งจะหาเจอง่ายที่สุด</p>
+    <p class="hint">ปักหมุดให้ตรงจุด ระบบจะคำนวณค่าส่งจากระยะทางให้ทันที</p>
 
     <div id="map" class="hidden"></div>
     <p class="hint hidden" id="map-hint">แตะบนแผนที่หรือลากหมุดสีแดงไปยังจุดที่ต้องการให้ไปส่ง</p>
     <div id="pin-box" class="pin-box hidden"></div>
 
+    <div class="dist-box" id="dist-box">
+      <div class="dist-row">
+        <span id="dist-label">ระยะทางจากร้าน</span>
+        <b id="dist-km">—</b>
+      </div>
+      <div class="dist-row">
+        <span>ค่าจัดส่ง</span>
+        <b id="dist-fee">—</b>
+      </div>
+      <p class="dist-note" id="dist-note"></p>
+    </div>
+
     <label class="field-label" for="addrNote" style="margin-top:14px;">จุดสังเกต / รายละเอียดเพิ่มเติม</label>
     <input class="input" id="addrNote" type="text" placeholder="เช่น ตึกสีเทา ตรงข้ามร้านกาแฟ ฝากไว้ที่ รปภ. ได้">
+
+    <label class="field-label" for="remark" style="margin-top:14px;">หมายเหตุถึงร้าน</label>
+    <textarea class="input" id="remark" placeholder="เช่น แพ้อาหารทะเล · ขอน้ำจิ้มเพิ่ม 2 ถ้วย · อยากได้ตอน 18:30"></textarea>
   </div>
 
-  <!-- ─────────── 9. หมายเหตุ + เวลา ─────────── -->
-  <div class="card card-pad">
-    <label class="field-label" for="remark">หมายเหตุถึงร้าน</label>
-    <textarea class="input" id="remark" placeholder="เช่น แพ้อาหารทะเล · ขอน้ำจิ้มเพิ่ม 2 ถ้วย · ไม่ใส่ผักชี"></textarea>
-
-    <label class="field-label" for="wantTime" style="margin-top:14px;">เวลาที่อยากได้รับ</label>
-    <input class="input" id="wantTime" type="text" placeholder="เช่น วันนี้ 18:30 หรือ เร็วที่สุด">
-  </div>
-
-  <!-- ─────────── 10. สรุป ─────────── -->
+  <!-- ─────────── 6. สรุปออเดอร์ ─────────── -->
   <div class="summary" id="summary">
     <h2>สรุปออเดอร์</h2>
     <div id="sum-lines"><p class="sum-empty">ยังไม่ได้เลือกอะไรเลย</p></div>
@@ -551,9 +507,9 @@
     </div>
   </div>
 
-  <!-- ─────────── 11. ชำระเงิน ─────────── -->
+  <!-- ─────────── 7. QR โอนเงิน ─────────── -->
   <div class="card card-pad">
-    <label class="field-label"><span class="step">4</span> &nbsp;โอนเงิน แล้วแนบสลิป <span class="req">*</span></label>
+    <label class="field-label"><span class="step">6</span> &nbsp;สแกนโอนเงิน</label>
 
     <div class="qr-wrap" id="qr-wrap">
       <div class="qr-frame">
@@ -567,17 +523,18 @@
       </p>
       <div class="btn-row" style="justify-content:center;">
         <button type="button" class="btn-ghost key" onclick="saveQr()">💾 บันทึกรูป QR</button>
-        <button type="button" class="btn-ghost key" onclick="copyText(document.getElementById('qr-id').textContent, 'คัดลอกเลขพร้อมเพย์แล้ว')">📋 คัดลอกเลข</button>
+        <button type="button" class="btn-ghost key"
+                onclick="copyText(document.getElementById('qr-id').textContent, 'คัดลอกเลขพร้อมเพย์แล้ว')">📋 คัดลอกเลข</button>
       </div>
     </div>
 
-    <div class="notice neutral hidden" id="qr-missing">
-      สาขานี้ยังไม่ได้ตั้งค่าพร้อมเพย์ — โอนตามเลขบัญชีด้านล่าง หรือทักไลน์ร้านเพื่อขอ QR
-    </div>
-
+    <div class="notice neutral hidden" id="qr-missing"></div>
     <div id="bank-list" style="margin-top:14px;"></div>
+  </div>
 
-    <label class="field-label" style="margin-top:16px;">แนบสลิปการโอน <span class="req" id="slip-req">*</span></label>
+  <!-- ─────────── 8. สลิป ─────────── -->
+  <div class="card card-pad">
+    <label class="field-label"><span class="step">7</span> &nbsp;แนบรูปสลิปโอนเงิน <span class="req" id="slip-req">*</span></label>
     <div class="slip-box" id="slip-box">
       <input type="file" id="slip-input" accept="image/*" onchange="handleSlip(event)">
       <div class="slip-ph" id="slip-ph">
@@ -601,6 +558,7 @@
 
 <div class="toast" id="toast"></div>
 <div id="done-root"></div>
+<div id="shop-root"></div>
 
 <!-- ════════════════════════════════════════════════════════════
      ตัวสร้าง QR + พร้อมเพย์ — ยกมาจาก pos.html ของระบบ POS ร้าน
@@ -991,48 +949,46 @@ var PromptPay = (function () {
   return { payload: payload, crc16: crc16, formatTarget: formatTarget };
 })();
 </script>
-
 <script>
 /* ════════════════════════════════════════════════════════════
    ⚙️  ตั้งค่าร้าน — แก้ได้ทั้งหมดในบล็อกนี้บล็อกเดียว
    ════════════════════════════════════════════════════════════ */
+
+/* ── ร้านที่ลูกค้าสั่งและที่ใช้วัดระยะทางค่าส่ง ──
+   lat / lng ยังเป็น null = ยังไม่ได้ตั้งพิกัดร้าน ระบบจะยังคิดค่าส่งไม่ได้
+   วิธีตั้ง: เปิดหน้านี้ต่อท้าย URL ด้วย ?setshop=1 แล้วจิ้มตำแหน่งร้านบนแผนที่
+            ระบบจะบอกตัวเลขให้เอามาวางตรงนี้                                  */
+const SHOP = {
+  name:        'ตลาดทรัพย์พัฒนา',
+  shopName:    'หม่าล่าหน้าแดง',
+  promptpayId: '004999124195842',   // ชุดเดียวกับ DEFAULT_BRANCH_QR ใน pos.html
+  lat: null,
+  lng: null
+};
+
+/* ── ค่าส่งตามระยะทาง ──
+   ไม่เกิน 1 กม. ไม่คิดค่าส่ง · เกินจากนั้นคิดกิโลละ 10 บาท ปัดขึ้น
+   เช่น 1.0 กม. = ฟรี · 1.1 กม. = 10 บาท · 2.0 กม. = 10 บาท · 2.1 กม. = 20 บาท */
+const DELIVERY = { freeKm: 1, bahtPerKm: 10 };
+
 const CONFIG = {
-  // ไลน์ OA ของร้าน (ใส่ @ ด้วย) — ใช้เปิดแชทพร้อมข้อความออเดอร์
-  // ว่างไว้ = ซ่อนปุ่ม "ส่งเข้าไลน์ร้าน"
-  lineOaId: '',
-
-  // Web app URL ของ Apps Script ที่รับออเดอร์ (ถ้ามี)
-  // ว่างไว้ = ไม่ยิงไปไหน ลูกค้าคัดลอกข้อความ/ส่งไลน์เอง
-  orderApiUrl: '',
-
-  // API key ของ ImgBB สำหรับอัปโหลดสลิป — ว่างไว้ = ไม่อัปโหลด
-  // ลูกค้าจะถูกขอให้ส่งรูปสลิปทางไลน์แทน
-  imgbbKey: '',
-
-  // ค่าส่ง (บาท) — 0 = คิดตามระยะทาง แจ้งลูกค้าทีหลัง (ไม่รวมใน QR)
-  deliveryFee: 0,
-  deliveryFeeNote: 'ค่าส่งคิดตามระยะทาง ทางร้านจะแจ้งก่อนไปส่ง',
-
-  // บังคับแนบสลิปก่อนส่งออเดอร์หรือไม่
-  requireSlip: true,
-
-  // บัญชีธนาคารสำรอง (นอกจากพร้อมเพย์) — ลบทั้ง array ได้ถ้าไม่ใช้
-  banks: [
+  lineOaId:    '',     // ไลน์ OA ของร้าน เช่น '@malanadaeng' — ใส่แล้วจะมีปุ่มส่งเข้าไลน์
+  orderApiUrl: '',     // URL Apps Script ที่รับออเดอร์ — ว่างไว้ = ไม่ยิงไปไหน
+  imgbbKey:    '',     // API key ของ ImgBB สำหรับอัปโหลดสลิป — ว่างไว้ = เก็บในเครื่องลูกค้า
+  requireSlip: true,   // บังคับแนบสลิปก่อนส่งออเดอร์
+  banks: [             // บัญชีธนาคารสำรอง — ลบทั้ง array ได้ถ้าไม่ใช้
     // { bank: 'กสิกรไทย', acc: '123-4-56789-0', name: 'หม่าล่าหน้าแดง' }
   ],
-
-  // จุดกลางแผนที่ตอนยังไม่รู้ตำแหน่งลูกค้า
-  mapCenter: { lat: 13.6614, lng: 100.6031, zoom: 13 }
+  // จุดกลางแผนที่ตอนยังไม่รู้ตำแหน่ง — ตั้งไว้กลางเมืองปากน้ำ สมุทรปราการ
+  // (ไม่ใช่พิกัดร้าน ใช้แค่เปิดแผนที่มาให้ใกล้ ๆ ย่านร้านเท่านั้น)
+  mapCenter: { lat: 13.5990, lng: 100.5998, zoom: 14 }
 };
 
-/* พร้อมเพย์ของแต่ละสาขา — ชุดเดียวกับ DEFAULT_BRANCH_QR ใน pos.html */
-const BRANCHES = {
-  'ตลาดทรัพย์พัฒนา': { promptpayId: '004999124195842', shopName: 'หม่าล่าหน้าแดง' },
-  'แบริ่ง':          { promptpayId: '',                shopName: 'หม่าล่าหน้าแดง' }
-};
-
-/* ── ตัวเลือกปรุงรส — ตรงกับ SOUPS / SPICES / SAUCES ใน pos.html ── */
-const SOUPS  = ['น้ำใส', 'กระดูกหมู', 'ดั้งเดิม', 'กระดูกหมูหม่าล่า', 'หม่าล่านม', 'น้ำดำ', 'น้ำดำหม่าล่า', 'ผัดแห้ง', 'ไม่เอาซุป'];
+/* ── ตัวเลือกปรุงรส — ตรงกับ SOUPS / SPICES / SAUCES ใน pos.html
+      เพิ่ม 'ย่าง' เข้ามาเป็นตัวเลือกหนึ่งของน้ำซุป (POS ยังไม่มีตัวนี้) ── */
+const GRILL = 'ย่าง';
+const SOUPS  = ['น้ำใส', 'กระดูกหมู', 'ดั้งเดิม', 'กระดูกหมูหม่าล่า', 'หม่าล่านม',
+                'น้ำดำ', 'น้ำดำหม่าล่า', 'ผัดแห้ง', GRILL, 'ไม่เอาซุป'];
 const SPICES = ['ไม่เผ็ด', 'เผ็ดน้อย', 'เผ็ดกลาง', 'เผ็ดมาก', 'เผ็ดพิเศษ'];
 const SAUCES = ['น้ำจิ้มงา', 'น้ำจิ้มสุกี้', 'ไม่เอาน้ำจิ้ม'];
 
@@ -1042,7 +998,7 @@ const EXTRAS      = [{ name: 'สาหร่ายแผ่น', price: 20 }];
 const DISCOUNT    = { perSticks: 10, baht: 5 };   // ครบทุก 10 ไม้ ลด 5 บาท
 
 /* ── เมนูจัดชุด — ชื่อตรงกับ DEFAULT_DELIVERY_MENU ใน pos.html
-      ราคา 0 = ยังไม่ได้ตั้งราคา ระบบจะปิดปุ่มไว้จนกว่าจะใส่ราคา ── */
+      ราคา 0 = ยังไม่ได้ตั้งราคา จะไม่ขึ้นในลิสต์ ── */
 const SET_MENUS = [
   { name: 'อุด้ง',          price: 0 },
   { name: 'หม่าล่าหน้าแดง', price: 0 },
@@ -1053,22 +1009,19 @@ const SET_MENUS = [
 /* ════════════════════════════════════════════════════════════
    วัตถุดิบ — ชื่อและหมวดตรงกับรายการสินค้าในระบบสต็อกของร้าน
    price : ราคาต่อไม้/ต่อที่ (POS มี 2 ขั้น คือ 10 กับ 15 บาท)
-   grill : false = ไม่ขึ้นในหมวดย่าง (ผักใบ เส้น ของที่ย่างไม่ได้)
+   grill : false = ย่างไม่ได้ ถ้าลูกค้าเลือก "ย่าง" จะมีคำเตือนขึ้นที่รายการนั้น
    ⚠️ ราคาด้านล่างอิงขั้นราคาของ POS — ตรวจกับป้ายหน้าร้านแล้วแก้ได้เลย
    ════════════════════════════════════════════════════════════ */
 const ITEMS = [
-  // ── เนื้อสัตว์ ──
-  { g: 'เนื้อสัตว์', n: 'สันคอสไลด์',           price: 15 },
-  { g: 'เนื้อสัตว์', n: 'สามชั้นสไลด์',         price: 15 },
-  { g: 'เนื้อสัตว์', n: 'เนื้อแดง',             price: 15 },
+  { g: 'เนื้อสัตว์', n: 'สันคอสไลด์',   price: 15 },
+  { g: 'เนื้อสัตว์', n: 'สามชั้นสไลด์', price: 15 },
+  { g: 'เนื้อสัตว์', n: 'เนื้อแดง',     price: 15 },
 
-  // ── ทะเล ──
-  { g: 'ทะเล', n: 'หมึก',            price: 15 },
-  { g: 'ทะเล', n: 'ปลาดอลลี่',       price: 15 },
-  { g: 'ทะเล', n: 'ปลาหมึกกรอบ',     price: 15 },
-  { g: 'ทะเล', n: 'แมงกะพรุน',       price: 15, grill: false },
+  { g: 'ทะเล', n: 'หมึก',        price: 15 },
+  { g: 'ทะเล', n: 'ปลาดอลลี่',   price: 15 },
+  { g: 'ทะเล', n: 'ปลาหมึกกรอบ', price: 15 },
+  { g: 'ทะเล', n: 'แมงกะพรุน',   price: 15, grill: false },
 
-  // ── เสียบไม้ ──
   { g: 'เสียบไม้', n: 'สันนอกห่อชีส',         price: 15 },
   { g: 'เสียบไม้', n: 'สามชั้นพันเห็ดเข็ม',   price: 15 },
   { g: 'เสียบไม้', n: 'สามชั้นพันสาหร่าย',    price: 15 },
@@ -1089,7 +1042,6 @@ const ITEMS = [
   { g: 'เสียบไม้', n: 'เต้าหู้ปลาแผ่น',       price: 10 },
   { g: 'เสียบไม้', n: 'เห็ดออรินจิ',          price: 10 },
 
-  // ── ผัก / เห็ด ──
   { g: 'ผัก / เห็ด', n: 'เห็ดเข็มทอง', price: 10 },
   { g: 'ผัก / เห็ด', n: 'เห็ดชิเมจิ',  price: 10 },
   { g: 'ผัก / เห็ด', n: 'ข้าวโพด',     price: 10 },
@@ -1100,40 +1052,42 @@ const ITEMS = [
   { g: 'ผัก / เห็ด', n: 'กวางตุ้ง',    price: 10, grill: false },
   { g: 'ผัก / เห็ด', n: 'สาหร่าย',     price: 10, grill: false },
 
-  // ── เส้น / แป้ง ──
   { g: 'เส้น / แป้ง', n: 'เส้นมันเทศ',      price: 10, grill: false },
   { g: 'เส้น / แป้ง', n: 'เส้นอุด้ง',       price: 10, grill: false },
   { g: 'เส้น / แป้ง', n: 'วุ้นเส้นหม่าล่า', price: 10, grill: false },
 
-  // ── แปรรูป ──
   { g: 'แปรรูป', n: 'ควิซ', price: 10 }
 ];
-ITEMS.forEach((it, i) => { it.id = i; if (it.grill === undefined) it.grill = true; });
 
-const GROUPS = [...new Set(ITEMS.map(it => it.g))];
+/* รวมทุกอย่างเป็นลิสต์เดียวเรียงลงมา — stick = นับเข้าส่วนลดทุก 10 ไม้ */
+const MENU = [];
+ITEMS.forEach(it => MENU.push({ g: it.g, n: it.n, price: it.price,
+                                grill: it.grill !== false, stick: true }));
+MAMA_PRICES.forEach(p => MENU.push({ g: 'มาม่า', n: 'มาม่า ' + p + ' บาท', price: p,
+                                     grill: true, stick: false }));
+EXTRAS.forEach(e => MENU.push({ g: 'ของเพิ่ม', n: e.name, price: e.price,
+                                grill: true, stick: false }));
+SET_MENUS.filter(s => s.price > 0)
+         .forEach(s => MENU.push({ g: 'เมนูจัดชุด', n: s.name, price: s.price,
+                                   grill: true, stick: false }));
+MENU.forEach((m, i) => m.id = i);
+
+const GROUPS = [...new Set(MENU.map(m => m.g))];
 const GROUP_ICON = {
-  'เนื้อสัตว์': '🥩', 'ทะเล': '🦑', 'เสียบไม้': '🍢',
-  'ผัก / เห็ด': '🥬', 'เส้น / แป้ง': '🍜', 'แปรรูป': '🧆'
+  'เนื้อสัตว์': '🥩', 'ทะเล': '🦑', 'เสียบไม้': '🍢', 'ผัก / เห็ด': '🥬',
+  'เส้น / แป้ง': '🍜', 'แปรรูป': '🧆', 'มาม่า': '🍲', 'ของเพิ่ม': '➕', 'เมนูจัดชุด': '🍱'
 };
 
 /* ════════════════════════════════════════════════════════════
    สถานะออเดอร์
    ════════════════════════════════════════════════════════════ */
 const state = {
-  branch: '',
-  openCats: new Set(),
-  hotpot: {},          // itemId -> จำนวน (ลวก)
-  grill:  {},          // itemId -> จำนวน (ย่าง)
-  mama:   {},          // ราคา  -> จำนวน
-  extra:  {},          // index -> จำนวน
-  set:    {},          // index -> จำนวน
-  soup: '', spice: '', sauce: '',        // หม่าล่าลวก
-  gspice: '', gsauce: '',                // หม่าล่าย่าง
-  pin: null                              // { lat, lng }
+  qty: {},           // id ในลิสต์เมนู -> จำนวน
+  soup: '', spice: '', sauce: '',
+  pin: null,         // { lat, lng } ที่ลูกค้าปักไว้
+  km: null           // ระยะทางจากร้าน (กม.) — null = ยังคำนวณไม่ได้
 };
-MAMA_PRICES.forEach(p => state.mama[p] = 0);
-EXTRAS.forEach((_, i) => state.extra[i] = 0);
-SET_MENUS.forEach((_, i) => state.set[i] = 0);
+MENU.forEach(m => state.qty[m.id] = 0);
 
 let slipDataUrl = null;   // รูปสลิปแบบ base64 (ไว้แสดง)
 let slipUrl     = null;   // ลิงก์สลิปหลังอัปโหลด (ถ้าตั้ง imgbbKey)
@@ -1153,58 +1107,77 @@ function toast(msg, isErr) {
 }
 
 /* ════════════════════════════════════════════════════════════
-   คิดเงิน — สูตรเดียวกับ totals() ใน pos.html
+   ค่าส่ง — ไม่เกิน freeKm ไม่คิด เกินแล้วคิดกิโลละ bahtPerKm ปัดขึ้น
+   ════════════════════════════════════════════════════════════ */
+function deliveryFee(km) {
+  if (km === null || km === undefined || isNaN(km)) return null;   // ยังไม่รู้ระยะทาง
+  const over = km - DELIVERY.freeKm;
+  if (over <= 0) return 0;
+  return Math.ceil(over - 1e-9) * DELIVERY.bahtPerKm;
+}
+
+/** ระยะทางเส้นตรงระหว่างสองพิกัด (กม.) */
+function haversineKm(a, b) {
+  const R = 6371, rad = d => d * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+  const s = Math.sin(dLat / 2) ** 2 +
+            Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+/* ════════════════════════════════════════════════════════════
+   คิดเงิน — ส่วนลดใช้สูตรเดียวกับ totals() ใน pos.html
    ════════════════════════════════════════════════════════════ */
 function totals() {
-  let stickCount = 0, stickAmount = 0;
-  ITEMS.forEach(it => {
-    const q = (state.hotpot[it.id] || 0) + (state.grill[it.id] || 0);
-    stickCount += q;
-    stickAmount += q * it.price;
+  let stickCount = 0, stickAmount = 0, otherCount = 0, otherAmount = 0;
+  MENU.forEach(m => {
+    const q = state.qty[m.id] || 0;
+    if (!q) return;
+    if (m.stick) { stickCount += q; stickAmount += q * m.price; }
+    else         { otherCount += q; otherAmount += q * m.price; }
   });
 
-  let mamaCount = 0, mamaAmount = 0;
-  MAMA_PRICES.forEach(p => { mamaCount += state.mama[p]; mamaAmount += state.mama[p] * p; });
-
-  let extraCount = 0, extraAmount = 0;
-  EXTRAS.forEach((e, i) => { extraCount += state.extra[i]; extraAmount += state.extra[i] * e.price; });
-
-  let setCount = 0, setAmount = 0;
-  SET_MENUS.forEach((s, i) => { setCount += state.set[i]; setAmount += state.set[i] * s.price; });
-
-  // นับเฉพาะ "ไม้" เข้าส่วนลด — มาม่า ของเพิ่ม และชุดจัด ไม่นับ (ตาม POS)
+  // นับเฉพาะ "ไม้" เข้าส่วนลด — มาม่า ของเพิ่ม และเมนูจัดชุด ไม่นับ (ตาม POS)
   const discountUnits = Math.floor(stickCount / DISCOUNT.perSticks);
   const discount      = discountUnits * DISCOUNT.baht;
-  const subtotal      = stickAmount + mamaAmount + extraAmount + setAmount;
-  const afterDiscount = Math.max(0, subtotal - discount);
-  const fee           = Number(CONFIG.deliveryFee) || 0;
+  const subtotal      = stickAmount + otherAmount;
+  const food          = Math.max(0, subtotal - discount);
+  const fee           = deliveryFee(state.km);
 
   return {
-    stickCount, stickAmount, mamaCount, mamaAmount, extraCount, extraAmount,
-    setCount, setAmount, subtotal, discountUnits, discount, fee,
-    total: afterDiscount + fee,
-    itemCount: stickCount + mamaCount + extraCount + setCount
+    stickCount, stickAmount, otherCount, otherAmount, subtotal,
+    discountUnits, discount, food,
+    fee: fee === null ? 0 : fee,
+    feeKnown: fee !== null,
+    total: food + (fee === null ? 0 : fee),
+    itemCount: stickCount + otherCount
   };
 }
 
 /* ════════════════════════════════════════════════════════════
    วาดหน้าจอ
    ════════════════════════════════════════════════════════════ */
-function stepperHtml(kind, key, qty) {
-  return `
-    <div class="stepper">
-      <button type="button" class="step-btn key" onclick="bump('${kind}',${key},-1)" aria-label="ลด">−</button>
-      <input class="step-input digits${qty > 0 ? ' has' : ''}" type="number" min="0" step="1" inputmode="numeric"
-             value="${qty}" id="q-${kind}-${key}"
-             oninput="typeQty('${kind}',${key},this.value)" onfocus="this.select()" onblur="normalizeQty('${kind}',${key})">
-      <button type="button" class="step-btn plus key" onclick="bump('${kind}',${key},1)" aria-label="เพิ่ม">+</button>
-    </div>`;
-}
-
-function renderBranchChips() {
-  $('branch-chips').innerHTML = Object.keys(BRANCHES).map(b => `
-    <button type="button" class="chip chip-dark key" data-branch="${esc(b)}" onclick="pickBranch('${esc(b)}')">${esc(b)}</button>
-  `).join('');
+function renderMenu() {
+  $('menu-list').innerHTML = GROUPS.map(g => {
+    const rows = MENU.filter(m => m.g === g);
+    return `
+      <div class="group-head">${GROUP_ICON[g] || '•'} ${esc(g)}</div>
+      ${rows.map(m => `
+        <div class="item-row" id="row-${m.id}">
+          <div class="item-main">
+            <div class="item-name">${esc(m.n)}</div>
+            <div class="item-price digits" id="p-${m.id}">${m.price} ฿</div>
+            <div class="item-warn hidden" id="w-${m.id}">ของชิ้นนี้ย่างไม่ได้ ทางร้านจะลวกให้แทน</div>
+          </div>
+          <div class="stepper">
+            <button type="button" class="step-btn key" onclick="bump(${m.id},-1)" aria-label="ลด">−</button>
+            <input class="step-input digits" type="number" min="0" step="1" inputmode="numeric"
+                   value="0" id="q-${m.id}" aria-label="${esc(m.n)}"
+                   oninput="typeQty(${m.id},this.value)" onfocus="this.select()" onblur="normalizeQty(${m.id})">
+            <button type="button" class="step-btn plus key" onclick="bump(${m.id},1)" aria-label="เพิ่ม">+</button>
+          </div>
+        </div>`).join('')}`;
+  }).join('');
 }
 
 function renderChips(containerId, options, field) {
@@ -1213,64 +1186,28 @@ function renderChips(containerId, options, field) {
   `).join('');
 }
 
-/** รายการวัตถุดิบของหมวด ลวก หรือ ย่าง */
-function renderItemList(kind) {
-  const list = ITEMS.filter(it => kind === 'hotpot' || it.grill);
-  const html = GROUPS.map(g => {
-    const rows = list.filter(it => it.g === g);
-    if (!rows.length) return '';
-    return `
-      <div class="group-head">${GROUP_ICON[g] || '•'} ${esc(g)}</div>
-      ${rows.map(it => `
-        <div class="item-row" id="row-${kind}-${it.id}">
-          <div class="item-main">
-            <div class="item-name">${esc(it.n)}</div>
-            <div class="item-price digits" id="p-${kind}-${it.id}">${it.price} ฿</div>
-          </div>
-          ${stepperHtml(kind, it.id, state[kind][it.id] || 0)}
-        </div>`).join('')}`;
-  }).join('');
-  $('list-' + kind).innerHTML = html;
+function pick(field, value) {
+  state[field] = (state[field] === value) ? '' : value;
+  const box = { soup: 'soup-chips', spice: 'spice-chips', sauce: 'sauce-chips' }[field];
+  document.querySelectorAll('#' + box + ' .chip')
+    .forEach(c => c.classList.toggle('on', c.dataset.opt === state[field]));
+  $(box).classList.remove('missing');
+  refresh();
 }
 
-function renderMamaList() {
-  $('list-mama').innerHTML = MAMA_PRICES.map(p => `
-    <div class="item-row" id="row-mama-${p}">
-      <div class="item-main">
-        <div class="item-name">มาม่า ${p} บาท</div>
-        <div class="item-price digits" id="p-mama-${p}">${p} ฿ ต่อห่อ</div>
-      </div>
-      ${stepperHtml('mama', p, state.mama[p])}
-    </div>`).join('');
+function bump(id, delta) {
+  state.qty[id] = Math.max(0, (state.qty[id] || 0) + delta);
+  $('q-' + id).value = state.qty[id];
+  refresh();
 }
 
-function renderExtraList() {
-  $('list-extra').innerHTML = EXTRAS.map((e, i) => `
-    <div class="item-row" id="row-extra-${i}">
-      <div class="item-main">
-        <div class="item-name">${esc(e.name)}</div>
-        <div class="item-price digits" id="p-extra-${i}">${e.price} ฿</div>
-      </div>
-      ${stepperHtml('extra', i, state.extra[i])}
-    </div>`).join('');
+function typeQty(id, raw) {
+  const n = parseInt(String(raw).replace(/[^0-9]/g, ''), 10);
+  state.qty[id] = isNaN(n) ? 0 : Math.min(n, 999);
+  refresh();
 }
 
-function renderSetList() {
-  const priced = SET_MENUS.filter(s => s.price > 0).length;
-  if (!priced) { $('card-set').classList.add('hidden'); return; }
-  $('card-set').classList.remove('hidden');
-  $('list-set').innerHTML = SET_MENUS.filter(s => s.price > 0).map(s => {
-    const i = SET_MENUS.indexOf(s);
-    return `
-      <div class="item-row" id="row-set-${i}">
-        <div class="item-main">
-          <div class="item-name">${esc(s.name)}</div>
-          <div class="item-price digits" id="p-set-${i}">${s.price} ฿ ต่อที่</div>
-        </div>
-        ${stepperHtml('set', i, state.set[i])}
-      </div>`;
-  }).join('');
-}
+function normalizeQty(id) { $('q-' + id).value = state.qty[id] || 0; }
 
 function renderBanks() {
   if (!CONFIG.banks.length) { $('bank-list').innerHTML = ''; return; }
@@ -1288,165 +1225,74 @@ function renderBanks() {
       </div>`).join('');
 }
 
-/* ── เลือก / กดจำนวน ── */
-function pickBranch(b) {
-  state.branch = b;
-  document.querySelectorAll('#branch-chips .chip')
-    .forEach(c => c.classList.toggle('on', c.dataset.branch === b));
-  refresh();
-}
-
-function pick(field, value) {
-  state[field] = (state[field] === value) ? '' : value;
-  const box = { soup: 'soup-chips', spice: 'spice-chips', sauce: 'sauce-chips',
-                gspice: 'gspice-chips', gsauce: 'gsauce-chips' }[field];
-  document.querySelectorAll('#' + box + ' .chip')
-    .forEach(c => c.classList.toggle('on', c.dataset.opt === state[field]));
-  $(box).classList.remove('missing');
-  refresh();
-}
-
-function store(kind) {
-  return { hotpot: state.hotpot, grill: state.grill, mama: state.mama,
-           extra: state.extra, set: state.set }[kind];
-}
-
-function bump(kind, key, delta) {
-  const s = store(kind);
-  s[key] = Math.max(0, (s[key] || 0) + delta);
-  $('q-' + kind + '-' + key).value = s[key];
-  refresh();
-}
-
-function typeQty(kind, key, raw) {
-  const n = parseInt(String(raw).replace(/[^0-9]/g, ''), 10);
-  store(kind)[key] = isNaN(n) ? 0 : Math.min(n, 999);
-  refresh();
-}
-
-function normalizeQty(kind, key) {
-  $('q-' + kind + '-' + key).value = store(kind)[key] || 0;
-}
-
-function toggleCat(cat) {
-  if (state.openCats.has(cat)) state.openCats.delete(cat);
-  else state.openCats.add(cat);
-  $('body-' + cat).classList.toggle('open', state.openCats.has(cat));
-  $('arrow-' + cat).classList.toggle('open', state.openCats.has(cat));
-}
-
-function openCat(cat) {
-  if (state.openCats.has(cat)) return;
-  state.openCats.add(cat);
-  $('body-' + cat).classList.add('open');
-  $('arrow-' + cat).classList.add('open');
-}
-
-/* ════════════════════════════════════════════════════════════
-   อัปเดตหน้าจอทุกครั้งที่มีการเปลี่ยนแปลง
-   ════════════════════════════════════════════════════════════ */
+/* ── อัปเดตหน้าจอทุกครั้งที่มีอะไรเปลี่ยน ── */
 function refresh() {
   const t = totals();
+  const grilling = state.soup === GRILL;
 
-  // จำนวนในหัวข้อแต่ละหมวด
-  const counts = {
-    hotpot: ITEMS.reduce((s, it) => s + (state.hotpot[it.id] || 0), 0),
-    grill:  ITEMS.reduce((s, it) => s + (state.grill[it.id]  || 0), 0),
-    mama:   t.mamaCount, extra: t.extraCount, set: t.setCount
-  };
-  Object.entries(counts).forEach(([cat, n]) => {
-    const b = $('badge-' + cat);
-    if (!b) return;
-    b.textContent = n;
-    b.classList.toggle('on', n > 0);
+  MENU.forEach(m => {
+    const q = state.qty[m.id] || 0;
+    $('row-' + m.id).classList.toggle('on', q > 0);
+    $('p-' + m.id).textContent = q > 0
+      ? `${m.price} ฿ × ${q} = ${baht(m.price * q)} ฿`
+      : `${m.price} ฿`;
+    $('w-' + m.id).classList.toggle('hidden', !(grilling && !m.grill && q > 0));
+    const box = $('q-' + m.id);
+    box.classList.toggle('has', q > 0);
+    if (document.activeElement !== box) box.value = q;
   });
 
-  // แต่ละแถว
-  ['hotpot', 'grill'].forEach(kind => {
-    ITEMS.forEach(it => {
-      const row = $('row-' + kind + '-' + it.id);
-      if (!row) return;
-      const q = state[kind][it.id] || 0;
-      row.classList.toggle('on', q > 0);
-      $('p-' + kind + '-' + it.id).textContent = q > 0
-        ? `${it.price} ฿ × ${q} = ${baht(it.price * q)} ฿`
-        : `${it.price} ฿`;
-      const box = $('q-' + kind + '-' + it.id);
-      if (box) { box.classList.toggle('has', q > 0); if (document.activeElement !== box) box.value = q; }
-    });
-  });
-  MAMA_PRICES.forEach(p => markSimpleRow('mama', p, state.mama[p], p, 'ต่อห่อ'));
-  EXTRAS.forEach((e, i) => markSimpleRow('extra', i, state.extra[i], e.price, ''));
-  SET_MENUS.forEach((s, i) => { if (s.price > 0) markSimpleRow('set', i, state.set[i], s.price, 'ต่อที่'); });
+  $('soup-hint').textContent = grilling
+    ? 'เลือกย่างแล้ว — ทางร้านจะย่างให้แล้วโรยผงหม่าล่าตามระดับความเผ็ดที่เลือก'
+    : 'อยากได้แบบย่าง เลือก "ย่าง" ในช่องนี้ได้เลย ไม่ต้องใส่น้ำซุป';
 
   renderSummary(t);
   renderQr(t);
   $('btn-submit').disabled = t.itemCount === 0;
 }
 
-function markSimpleRow(kind, key, qty, price, suffix) {
-  const row = $('row-' + kind + '-' + key);
-  if (!row) return;
-  row.classList.toggle('on', qty > 0);
-  $('p-' + kind + '-' + key).textContent = qty > 0
-    ? `${price} ฿ × ${qty} = ${baht(price * qty)} ฿`
-    : `${price} ฿${suffix ? ' ' + suffix : ''}`;
-  const box = $('q-' + kind + '-' + key);
-  if (box) { box.classList.toggle('has', qty > 0); if (document.activeElement !== box) box.value = qty; }
-}
-
 function renderSummary(t) {
+  const picked = MENU.filter(m => state.qty[m.id] > 0);
   const out = [];
 
-  const hot = ITEMS.filter(it => state.hotpot[it.id] > 0);
-  if (hot.length) {
-    out.push(`<div class="sum-line sum-head"><span>🍲 หม่าล่าลวก</span><span class="sl-amt"></span></div>`);
-    out.push(`<div class="sum-note">${esc(state.soup || 'ยังไม่เลือกน้ำซุป')} · ${esc(state.spice || 'ยังไม่เลือกความเผ็ด')} · ${esc(state.sauce || 'ยังไม่เลือกน้ำจิ้ม')}</div>`);
-    hot.forEach(it => out.push(line(`${it.n} × ${state.hotpot[it.id]}`, it.price * state.hotpot[it.id])));
-  }
-
-  const gr = ITEMS.filter(it => state.grill[it.id] > 0);
-  if (gr.length) {
-    out.push(`<div class="sum-line sum-head"><span>🔥 หม่าล่าย่าง</span><span class="sl-amt"></span></div>`);
-    out.push(`<div class="sum-note">${esc(state.gspice || 'ยังไม่เลือกความเผ็ด')} · ${esc(state.gsauce || 'ยังไม่เลือกน้ำจิ้ม')}</div>`);
-    gr.forEach(it => out.push(line(`${it.n} × ${state.grill[it.id]}`, it.price * state.grill[it.id])));
-  }
-
-  const mama = MAMA_PRICES.filter(p => state.mama[p] > 0);
-  if (mama.length) {
-    out.push(`<div class="sum-line sum-head"><span>🍜 มาม่า</span><span class="sl-amt"></span></div>`);
-    mama.forEach(p => out.push(line(`มาม่า ${p} บาท × ${state.mama[p]}`, p * state.mama[p])));
-  }
-
-  const ex = EXTRAS.map((e, i) => ({ e, i })).filter(x => state.extra[x.i] > 0);
-  if (ex.length) {
-    out.push(`<div class="sum-line sum-head"><span>➕ ของเพิ่ม</span><span class="sl-amt"></span></div>`);
-    ex.forEach(x => out.push(line(`${x.e.name} × ${state.extra[x.i]}`, x.e.price * state.extra[x.i])));
-  }
-
-  const st = SET_MENUS.map((s, i) => ({ s, i })).filter(x => state.set[x.i] > 0);
-  if (st.length) {
-    out.push(`<div class="sum-line sum-head"><span>🍱 เมนูจัดชุด</span><span class="sl-amt"></span></div>`);
-    st.forEach(x => out.push(line(`${x.s.name} × ${state.set[x.i]}`, x.s.price * state.set[x.i])));
-  }
-
-  if (!out.length) {
+  if (!picked.length) {
     $('sum-lines').innerHTML = '<p class="sum-empty">ยังไม่ได้เลือกอะไรเลย</p>';
-  } else {
-    if (t.stickCount) {
-      const need = DISCOUNT.perSticks - (t.stickCount % DISCOUNT.perSticks);
-      out.push(`<div class="sum-note" style="padding-top:9px;">รวม ${t.stickCount} ไม้` +
-        (t.discountUnits
-          ? ` · ได้ส่วนลดแล้ว ${t.discountUnits} ครั้ง`
-          : ` · อีก ${need} ไม้ได้ลด ${DISCOUNT.baht} บาท`) + `</div>`);
-    }
-    if (t.discount) {
-      out.push(`<div class="sum-line discount"><span>ส่วนลด ${t.discountUnits} × ${DISCOUNT.baht} ฿ (ครบ ${DISCOUNT.perSticks} ไม้)</span><span class="sl-amt digits">− ${baht(t.discount)} ฿</span></div>`);
-    }
-    if (t.fee > 0) out.push(line('ค่าจัดส่ง', t.fee));
-    else out.push(`<div class="sum-note">🛵 ${esc(CONFIG.deliveryFeeNote)}</div>`);
-    $('sum-lines').innerHTML = out.join('');
+    $('grand-total').textContent = '0 ฿';
+    return;
   }
+
+  out.push(`<div class="sum-note">${esc(state.soup || 'ยังไม่เลือกน้ำซุป')} · ` +
+           `${esc(state.spice || 'ยังไม่เลือกความเผ็ด')} · ` +
+           `${esc(state.sauce || 'ยังไม่เลือกน้ำจิ้ม')}</div>`);
+
+  GROUPS.forEach(g => {
+    const rows = picked.filter(m => m.g === g);
+    if (!rows.length) return;
+    out.push(`<div class="sum-line sum-head"><span>${GROUP_ICON[g] || '•'} ${esc(g)}</span><span class="sl-amt"></span></div>`);
+    rows.forEach(m => out.push(line(`${m.n} × ${state.qty[m.id]}`, m.price * state.qty[m.id])));
+  });
+
+  if (t.stickCount) {
+    const need = DISCOUNT.perSticks - (t.stickCount % DISCOUNT.perSticks);
+    out.push(`<div class="sum-note" style="padding-top:9px;">รวม ${t.stickCount} ไม้` +
+      (t.discountUnits ? ` · ได้ส่วนลดแล้ว ${t.discountUnits} ครั้ง`
+                       : ` · อีก ${need} ไม้ได้ลด ${DISCOUNT.baht} บาท`) + `</div>`);
+  }
+  if (t.discount) {
+    out.push(`<div class="sum-line discount"><span>ส่วนลด ${t.discountUnits} × ${DISCOUNT.baht} ฿ (ครบ ${DISCOUNT.perSticks} ไม้)</span>` +
+             `<span class="sl-amt digits">− ${baht(t.discount)} ฿</span></div>`);
+  }
+
+  if (!t.feeKnown) {
+    out.push(`<div class="sum-note">🛵 ${esc(distanceReason())}</div>`);
+  } else if (t.fee === 0) {
+    out.push(`<div class="sum-line"><span>ค่าจัดส่ง (${state.km.toFixed(2)} กม. · ไม่เกิน ${DELIVERY.freeKm} กม.)</span>` +
+             `<span class="sl-amt digits" style="color:#6ee7a8;">ฟรี</span></div>`);
+  } else {
+    out.push(line(`ค่าจัดส่ง (${state.km.toFixed(2)} กม.)`, t.fee));
+  }
+
+  $('sum-lines').innerHTML = out.join('');
   $('grand-total').textContent = baht(t.total) + ' ฿';
 
   function line(label, amt) {
@@ -1454,35 +1300,31 @@ function renderSummary(t) {
   }
 }
 
-/* ════════════════════════════════════════════════════════════
-   QR พร้อมเพย์ — สร้างใหม่ทุกครั้งที่ยอดเปลี่ยน
-   ════════════════════════════════════════════════════════════ */
+/* ── QR พร้อมเพย์ — สร้างใหม่ทุกครั้งที่ยอดเปลี่ยน ── */
 function renderQr(t) {
-  const conf = BRANCHES[state.branch];
   const wrap = $('qr-wrap'), missing = $('qr-missing');
 
-  if (!conf || !conf.promptpayId) {
+  if (!SHOP.promptpayId) {
     wrap.classList.add('hidden');
     missing.classList.remove('hidden');
-    missing.textContent = state.branch
-      ? `สาขา${state.branch}ยังไม่ได้ตั้งค่าพร้อมเพย์ — โอนตามบัญชีด้านล่าง หรือทักไลน์ร้านเพื่อขอ QR`
-      : 'เลือกสาขาก่อน ระบบจะสร้าง QR พร้อมยอดเงินให้อัตโนมัติ';
+    missing.textContent = 'ร้านยังไม่ได้ตั้งค่าพร้อมเพย์ — โอนตามบัญชีด้านล่าง หรือทักไลน์ร้านเพื่อขอ QR';
     return;
   }
 
   wrap.classList.remove('hidden');
   missing.classList.add('hidden');
-  $('qr-shop').textContent = conf.shopName || 'หม่าล่าหน้าแดง';
-  $('qr-id').textContent   = conf.promptpayId;
+  $('qr-shop').textContent   = SHOP.shopName;
+  $('qr-id').textContent     = SHOP.promptpayId;
   $('qr-amount').textContent = t.total > 0 ? baht(t.total) + '.00 ฿' : '0.00 ฿';
-  $('qr-state').textContent  = t.total > 0
-    ? 'QR ใส่ยอดเงินมาให้แล้ว สแกนแล้วโอนได้เลย'
-    : 'เลือกรายการก่อน ยอดเงินจะถูกใส่ลงใน QR ให้เอง';
+  $('qr-state').textContent  = t.total <= 0
+    ? 'เลือกรายการก่อน ยอดเงินจะถูกใส่ลงใน QR ให้เอง'
+    : (t.feeKnown ? 'QR ใส่ยอดเงินมาให้แล้ว สแกนแล้วโอนได้เลย'
+                  : 'ยอดนี้ยังไม่รวมค่าส่ง — ปักหมุดที่อยู่ก่อนจะได้ยอดเต็ม');
 
   try {
     QRCodeGen.renderCanvas(
       $('qr-canvas'),
-      PromptPay.payload(conf.promptpayId, t.total > 0 ? t.total : 0),
+      PromptPay.payload(SHOP.promptpayId, t.total > 0 ? t.total : 0),
       { level: 'M', size: 480, quiet: 3, dark: '#0d0d0f' }
     );
   } catch (err) {
@@ -1493,9 +1335,7 @@ function renderQr(t) {
 }
 
 function saveQr() {
-  if (!state.branch || !BRANCHES[state.branch] || !BRANCHES[state.branch].promptpayId) {
-    toast('เลือกสาขาที่มีพร้อมเพย์ก่อน', true); return;
-  }
+  if (!SHOP.promptpayId) { toast('ร้านยังไม่ได้ตั้งค่าพร้อมเพย์', true); return; }
   const a = document.createElement('a');
   a.href = $('qr-canvas').toDataURL('image/png');
   a.download = 'promptpay-หม่าล่าหน้าแดง-' + baht(totals().total) + 'บาท.png';
@@ -1524,12 +1364,53 @@ function fallbackCopy(text, done) {
 }
 
 /* ════════════════════════════════════════════════════════════
-   ที่อยู่จัดส่ง — พิมพ์เอง / ใช้ GPS / ปักหมุดบนแผนที่
+   ที่อยู่จัดส่ง + ระยะทาง — พิมพ์เอง / GPS / ปักหมุด / ค้นหาจากที่อยู่
    ════════════════════════════════════════════════════════════ */
-let map = null, marker = null, leafletLoading = false;
+function shopHasPin() { return typeof SHOP.lat === 'number' && typeof SHOP.lng === 'number'; }
+
+function distanceReason() {
+  if (!shopHasPin()) return 'ค่าส่งคิดตามระยะทาง ทางร้านจะแจ้งก่อนไปส่ง';
+  if (!state.pin)    return 'ปักหมุดที่อยู่เพื่อให้ระบบคิดค่าส่งให้อัตโนมัติ';
+  return '';
+}
+
+function updateDistance() {
+  const box = $('dist-box'), kmEl = $('dist-km'), feeEl = $('dist-fee'), note = $('dist-note');
+  $('dist-label').textContent = 'ระยะทางจาก' + SHOP.name;
+
+  if (!shopHasPin()) {
+    state.km = null;
+    box.classList.remove('ready');
+    kmEl.textContent = '—';
+    feeEl.textContent = 'แจ้งภายหลัง'; feeEl.className = '';
+    note.textContent = 'ร้านยังไม่ได้ตั้งพิกัดหน้าร้าน ระบบจึงยังคิดค่าส่งให้ไม่ได้ — ทางร้านจะแจ้งค่าส่งก่อนไปส่ง';
+  } else if (!state.pin) {
+    state.km = null;
+    box.classList.remove('ready');
+    kmEl.textContent = '—';
+    feeEl.textContent = '—'; feeEl.className = '';
+    note.textContent = `ยังไม่ได้ปักหมุด — ไม่เกิน ${DELIVERY.freeKm} กม. ส่งฟรี เกินจากนั้นคิดกิโลละ ${DELIVERY.bahtPerKm} บาท`;
+  } else {
+    state.km = Math.round(haversineKm({ lat: SHOP.lat, lng: SHOP.lng }, state.pin) * 100) / 100;
+    const fee = deliveryFee(state.km);
+    box.classList.add('ready');
+    kmEl.textContent = state.km.toFixed(2) + ' กม.';
+    if (fee === 0) {
+      feeEl.textContent = 'ส่งฟรี'; feeEl.className = 'free';
+      note.textContent = `ไม่เกิน ${DELIVERY.freeKm} กม. ไม่คิดค่าส่ง · วัดเป็นเส้นตรงจาก${SHOP.name}`;
+    } else {
+      feeEl.textContent = baht(fee) + ' ฿'; feeEl.className = 'paid';
+      note.textContent = `เกิน ${DELIVERY.freeKm} กม. คิดกิโลละ ${DELIVERY.bahtPerKm} บาท ปัดขึ้น · วัดเป็นเส้นตรงจาก${SHOP.name}`;
+    }
+  }
+  refresh();
+}
+
+let map = null, marker = null, leafletLoading = false, leafletQueue = [];
 
 function loadLeaflet(cb) {
   if (window.L) return cb();
+  leafletQueue.push(cb);
   if (leafletLoading) return;
   leafletLoading = true;
   const css = document.createElement('link');
@@ -1538,9 +1419,13 @@ function loadLeaflet(cb) {
   document.head.appendChild(css);
   const js = document.createElement('script');
   js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js';
-  js.onload  = () => { leafletLoading = false; cb(); };
-  js.onerror = () => {
+  js.onload = () => {
     leafletLoading = false;
+    const q = leafletQueue; leafletQueue = [];
+    q.forEach(fn => fn());
+  };
+  js.onerror = () => {
+    leafletLoading = false; leafletQueue = [];
     $('map').classList.add('hidden');
     $('map-hint').classList.add('hidden');
     $('btn-map').classList.remove('on');
@@ -1549,11 +1434,11 @@ function loadLeaflet(cb) {
   document.head.appendChild(js);
 }
 
-function pinIcon() {
+function pinIcon(color) {
   return L.divIcon({
     className: 'pin-icon',
     html: '<div style="width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);' +
-          'background:#e11d2f;border:3px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.45);"></div>',
+          'background:' + (color || '#e11d2f') + ';border:3px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.45);"></div>',
     iconSize: [24, 24], iconAnchor: [12, 24]
   });
 }
@@ -1567,14 +1452,26 @@ function toggleMap() {
   if (!showing) loadLeaflet(initMap);
 }
 
+function showMap() {
+  $('map').classList.remove('hidden');
+  $('map-hint').classList.remove('hidden');
+  $('btn-map').classList.add('on');
+  loadLeaflet(initMap);
+}
+
 function initMap() {
   if (map) { setTimeout(() => map.invalidateSize(), 80); return; }
-  const c = state.pin || CONFIG.mapCenter;
+  const c = state.pin || (shopHasPin() ? SHOP : CONFIG.mapCenter);
   map = L.map('map', { zoomControl: true })
          .setView([c.lat, c.lng], state.pin ? 17 : CONFIG.mapCenter.zoom);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: '&copy; OpenStreetMap'
   }).addTo(map);
+  // หมุดร้าน (ดำ) ไว้ให้ลูกค้าเห็นว่าวัดระยะจากตรงไหน
+  if (shopHasPin()) {
+    L.marker([SHOP.lat, SHOP.lng], { icon: pinIcon('#0d0d0f'), interactive: false })
+     .addTo(map).bindTooltip(SHOP.name);
+  }
   map.on('click', e => setPin(e.latlng.lat, e.latlng.lng, false));
   if (state.pin) setPin(state.pin.lat, state.pin.lng, false);
   setTimeout(() => map.invalidateSize(), 80);
@@ -1592,12 +1489,14 @@ function setPin(lat, lng, recenter) {
     if (recenter) map.setView([lat, lng], Math.max(map.getZoom(), 17));
   }
   renderPinBox();
+  updateDistance();
 }
 
 function clearPin() {
   state.pin = null;
   if (marker && map) { map.removeLayer(marker); marker = null; }
   renderPinBox();
+  updateDistance();
 }
 
 function renderPinBox() {
@@ -1617,14 +1516,12 @@ function mapsUrl() {
 
 function useMyLocation() {
   const btn = $('btn-gps');
-  if (!navigator.geolocation) { toast('เครื่องนี้หาตำแหน่งไม่ได้ พิมพ์ที่อยู่แทนได้เลย', true); return; }
+  if (!navigator.geolocation) { toast('เครื่องนี้หาตำแหน่งไม่ได้ ปักหมุดเองได้เลย', true); return; }
   btn.disabled = true; btn.textContent = '📍 กำลังหาตำแหน่ง...';
   navigator.geolocation.getCurrentPosition(pos => {
     btn.disabled = false; btn.textContent = '📍 ใช้ตำแหน่งปัจจุบัน';
     setPin(pos.coords.latitude, pos.coords.longitude, true);
-    $('map').classList.remove('hidden');
-    $('map-hint').classList.remove('hidden');
-    $('btn-map').classList.add('on');
+    showMap();
     loadLeaflet(() => { initMap(); setPin(state.pin.lat, state.pin.lng, true); });
     toast('ปักหมุดที่ตำแหน่งปัจจุบันให้แล้ว');
   }, err => {
@@ -1633,6 +1530,32 @@ function useMyLocation() {
       ? 'ไม่ได้อนุญาตให้ใช้ตำแหน่ง — ปักหมุดเองหรือพิมพ์ที่อยู่ได้'
       : 'หาตำแหน่งไม่สำเร็จ ลองใหม่อีกครั้ง', true);
   }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+}
+
+/** ค้นหาพิกัดจากที่อยู่ที่พิมพ์ (OpenStreetMap Nominatim — ฟรี ไม่ต้องใช้ key) */
+async function geocodeAddress() {
+  const q = $('addrText').value.trim();
+  if (q.length < 8) { toast('พิมพ์ที่อยู่ให้ละเอียดกว่านี้ก่อน', true); $('addrText').focus(); return; }
+  const btn = $('btn-geo');
+  btn.disabled = true; btn.textContent = '🔎 กำลังค้นหา...';
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1' +
+                '&countrycodes=th&accept-language=th&q=' + encodeURIComponent(q);
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const j = await res.json();
+    if (!Array.isArray(j) || !j.length) throw new Error('ไม่พบ');
+    showMap();
+    loadLeaflet(() => {
+      initMap();
+      setPin(parseFloat(j[0].lat), parseFloat(j[0].lon), true);
+    });
+    setPin(parseFloat(j[0].lat), parseFloat(j[0].lon), true);
+    toast('เจอที่อยู่แล้ว — ลากหมุดปรับให้ตรงจุดได้');
+  } catch {
+    toast('ค้นหาที่อยู่ไม่สำเร็จ — ปักหมุดเองบนแผนที่ได้เลย', true);
+  }
+  btn.disabled = false; btn.textContent = '🔎 ค้นหาจากที่อยู่';
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1685,7 +1608,6 @@ function handleSlip(e) {
       $('slip-box').classList.add('has');
       $('slip-hint').textContent = 'แนบสลิปแล้ว — กดที่รูปเพื่อเปลี่ยนรูปใหม่';
 
-      // อ่าน QR ในสลิป ไว้ให้ร้านตรวจกับยอดที่โอนจริง
       loadJsQR(() => {
         try {
           const d = ctx.getImageData(0, 0, w, h);
@@ -1724,10 +1646,19 @@ function uploadSlip() {
    ════════════════════════════════════════════════════════════ */
 function validate() {
   const errs = [];
-  let focusEl = null, openThis = null;
-  const flag = (el, cond) => { if (el) el.classList.toggle('error', !!cond); };
+  let focusEl = null;
+  const flag = (el, bad) => { if (el) el.classList.toggle('error', !!bad); };
 
-  if (!state.branch) { errs.push('เลือกสาขาที่สั่ง'); focusEl = focusEl || $('branch-chips'); }
+  const t = totals();
+  if (t.itemCount === 0) { errs.push('เลือกวัตถุดิบอย่างน้อย 1 รายการ'); focusEl = focusEl || $('menu-list'); }
+
+  [['soup', 'น้ำซุป / วิธีทำ', 'soup-chips'],
+   ['spice', 'ระดับความเผ็ด', 'spice-chips'],
+   ['sauce', 'น้ำจิ้ม', 'sauce-chips']].forEach(([f, label, box]) => {
+    const miss = !state[f];
+    $(box).classList.toggle('missing', miss);
+    if (miss) { errs.push('เลือก' + label); focusEl = focusEl || $(box); }
+  });
 
   const name = $('custName').value.trim();
   flag($('custName'), !name);
@@ -1738,40 +1669,17 @@ function validate() {
   flag($('custPhone'), !phoneOk);
   if (!phoneOk) { errs.push('กรอกเบอร์โทร 10 หลัก ขึ้นต้นด้วย 0'); focusEl = focusEl || $('custPhone'); }
 
-  const t = totals();
-  if (t.itemCount === 0) errs.push('เลือกอย่างน้อย 1 รายการ');
-
-  const hasHot = ITEMS.some(it => state.hotpot[it.id] > 0) || t.setCount > 0;
-  if (hasHot) {
-    [['soup', 'น้ำซุป', 'soup-chips'], ['spice', 'ระดับความเผ็ด', 'spice-chips'], ['sauce', 'น้ำจิ้ม', 'sauce-chips']]
-      .forEach(([f, label, box]) => {
-        const miss = !state[f];
-        $(box).classList.toggle('missing', miss);
-        if (miss) { errs.push('เลือก' + label + ' ของหม่าล่าลวก'); openThis = openThis || 'hotpot'; focusEl = focusEl || $(box); }
-      });
-  }
-
-  const hasGrill = ITEMS.some(it => state.grill[it.id] > 0);
-  if (hasGrill) {
-    [['gspice', 'ระดับความเผ็ด', 'gspice-chips'], ['gsauce', 'น้ำจิ้ม', 'gsauce-chips']]
-      .forEach(([f, label, box]) => {
-        const miss = !state[f];
-        $(box).classList.toggle('missing', miss);
-        if (miss) { errs.push('เลือก' + label + ' ของหม่าล่าย่าง'); openThis = openThis || 'grill'; focusEl = focusEl || $(box); }
-      });
-  }
-
   const addr = $('addrText').value.trim();
   const addrOk = addr.length >= 8 || !!state.pin;
   flag($('addrText'), !addrOk);
   if (!addrOk) { errs.push('พิมพ์ที่อยู่จัดส่ง หรือปักหมุดบนแผนที่'); focusEl = focusEl || $('addrText'); }
 
   if (CONFIG.requireSlip && !slipDataUrl) {
-    errs.push('แนบสลิปการโอนเงิน');
+    errs.push('แนบรูปสลิปโอนเงิน');
     focusEl = focusEl || $('slip-box');
   }
 
-  return { errs, focusEl, openThis };
+  return { errs, focusEl };
 }
 
 function showErrors(errs) {
@@ -1790,47 +1698,31 @@ function buildOrderText() {
   const sep = '━━━━━━━━━━━━━━━';
 
   L.push('🌶️ ออเดอร์หม่าล่าหน้าแดง');
-  L.push('สาขา: ' + (state.branch || '-'));
+  L.push('ร้าน: ' + SHOP.name);
   L.push('ชื่อ: ' + $('custName').value.trim() + '  ·  โทร: ' + $('custPhone').value.trim());
   L.push(sep);
+  L.push((state.soup === GRILL ? '🔥 ย่าง' : '🍲 น้ำซุป: ' + (state.soup || '-')) +
+         '  ·  เผ็ด: ' + (state.spice || '-') + '  ·  น้ำจิ้ม: ' + (state.sauce || '-'));
 
-  const hot = ITEMS.filter(it => state.hotpot[it.id] > 0);
-  if (hot.length) {
-    L.push('🍲 หม่าล่าลวก');
-    L.push('   น้ำซุป: ' + (state.soup || '-') + ' · เผ็ด: ' + (state.spice || '-') + ' · น้ำจิ้ม: ' + (state.sauce || '-'));
-    hot.forEach(it => L.push('   • ' + it.n + ' x' + state.hotpot[it.id] + '  (' + baht(it.price * state.hotpot[it.id]) + '฿)'));
-  }
-
-  const gr = ITEMS.filter(it => state.grill[it.id] > 0);
-  if (gr.length) {
-    L.push('🔥 หม่าล่าย่าง');
-    L.push('   เผ็ด: ' + (state.gspice || '-') + ' · น้ำจิ้ม: ' + (state.gsauce || '-'));
-    gr.forEach(it => L.push('   • ' + it.n + ' x' + state.grill[it.id] + '  (' + baht(it.price * state.grill[it.id]) + '฿)'));
-  }
-
-  const mama = MAMA_PRICES.filter(p => state.mama[p] > 0);
-  if (mama.length) {
-    L.push('🍜 มาม่า');
-    mama.forEach(p => L.push('   • มาม่า ' + p + '฿ x' + state.mama[p] + '  (' + baht(p * state.mama[p]) + '฿)'));
-  }
-
-  const ex = EXTRAS.map((e, i) => ({ e, i })).filter(x => state.extra[x.i] > 0);
-  if (ex.length) {
-    L.push('➕ ของเพิ่ม');
-    ex.forEach(x => L.push('   • ' + x.e.name + ' x' + state.extra[x.i] + '  (' + baht(x.e.price * state.extra[x.i]) + '฿)'));
-  }
-
-  const st = SET_MENUS.map((s, i) => ({ s, i })).filter(x => state.set[x.i] > 0);
-  if (st.length) {
-    L.push('🍱 เมนูจัดชุด');
-    st.forEach(x => L.push('   • ' + x.s.name + ' x' + state.set[x.i] + '  (' + baht(x.s.price * state.set[x.i]) + '฿)'));
-  }
+  GROUPS.forEach(g => {
+    const rows = MENU.filter(m => m.g === g && state.qty[m.id] > 0);
+    if (!rows.length) return;
+    L.push((GROUP_ICON[g] || '•') + ' ' + g);
+    rows.forEach(m => {
+      const warn = (state.soup === GRILL && !m.grill) ? '  ← ย่างไม่ได้ ลวกให้แทน' : '';
+      L.push('   • ' + m.n + ' x' + state.qty[m.id] +
+             '  (' + baht(m.price * state.qty[m.id]) + '฿)' + warn);
+    });
+  });
 
   L.push(sep);
   if (t.stickCount) L.push('รวม ' + t.stickCount + ' ไม้  (' + baht(t.stickAmount) + '฿)');
+  if (t.otherCount) L.push('รายการอื่น ' + t.otherCount + ' ชิ้น  (' + baht(t.otherAmount) + '฿)');
   if (t.discount)   L.push('ส่วนลดครบ ' + DISCOUNT.perSticks + ' ไม้ x' + t.discountUnits + ' = -' + baht(t.discount) + '฿');
-  if (t.fee > 0)    L.push('ค่าจัดส่ง ' + baht(t.fee) + '฿');
-  else              L.push('ค่าจัดส่ง: ' + CONFIG.deliveryFeeNote);
+  L.push('ค่าอาหาร ' + baht(t.food) + '฿');
+  if (!t.feeKnown)      L.push('ค่าจัดส่ง: ' + distanceReason());
+  else if (t.fee === 0) L.push('ค่าจัดส่ง: ฟรี (' + state.km.toFixed(2) + ' กม. ไม่เกิน ' + DELIVERY.freeKm + ' กม.)');
+  else                  L.push('ค่าจัดส่ง: ' + baht(t.fee) + '฿ (' + state.km.toFixed(2) + ' กม.)');
   L.push('💰 ยอดที่โอน: ' + baht(t.total) + ' บาท');
   L.push(sep);
 
@@ -1844,12 +1736,10 @@ function buildOrderText() {
   const note = $('addrNote').value.trim();
   if (note) L.push('   จุดสังเกต: ' + note);
 
-  const want = $('wantTime').value.trim();
-  if (want) L.push('⏰ เวลาที่อยากได้รับ: ' + want);
   const remark = $('remark').value.trim();
   if (remark) L.push('📝 หมายเหตุ: ' + remark);
 
-  if (slipUrl)        L.push('🧾 สลิป: ' + slipUrl);
+  if (slipUrl)          L.push('🧾 สลิป: ' + slipUrl);
   else if (slipDataUrl) L.push('🧾 สลิป: แนบไว้แล้ว — ส่งรูปสลิปตามมาในแชทด้วย');
 
   return { text: L.join('\n'), totals: t };
@@ -1862,7 +1752,6 @@ async function submitOrder() {
   const v = validate();
   if (v.errs.length) {
     showErrors(v.errs);
-    if (v.openThis) openCat(v.openThis);
     if (v.focusEl) v.focusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     toast(v.errs[0], true);
     return;
@@ -1879,22 +1768,18 @@ async function submitOrder() {
         method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
           source: 'web-order',
-          branch: state.branch,
+          shop: SHOP.name,
           customerName: $('custName').value.trim(),
           phone: $('custPhone').value.trim(),
-          hotpot: { soup: state.soup, spice: state.spice, sauce: state.sauce,
-                    items: ITEMS.filter(it => state.hotpot[it.id] > 0)
-                                .map(it => ({ name: it.n, qty: state.hotpot[it.id], price: it.price })) },
-          grill:  { spice: state.gspice, sauce: state.gsauce,
-                    items: ITEMS.filter(it => state.grill[it.id] > 0)
-                                .map(it => ({ name: it.n, qty: state.grill[it.id], price: it.price })) },
-          mama:  MAMA_PRICES.filter(p => state.mama[p] > 0).map(p => ({ price: p, qty: state.mama[p] })),
-          extras: EXTRAS.map((e, i) => ({ name: e.name, price: e.price, qty: state.extra[i] })).filter(x => x.qty > 0),
-          sets:   SET_MENUS.map((s, i) => ({ name: s.name, price: s.price, qty: state.set[i] })).filter(x => x.qty > 0),
+          soup: state.soup, spice: state.spice, sauce: state.sauce,
+          grilled: state.soup === GRILL,
+          items: MENU.filter(m => state.qty[m.id] > 0)
+                     .map(m => ({ name: m.n, group: m.g, qty: state.qty[m.id],
+                                  price: m.price, stick: m.stick })),
           address: $('addrText').value.trim(),
           addressNote: $('addrNote').value.trim(),
           pin: state.pin, mapUrl: mapsUrl(),
-          wantTime: $('wantTime').value.trim(),
+          distanceKm: state.km,
           remark: $('remark').value.trim(),
           slipUrl: slipUrl, slipQR: slipQR,
           totals: built.totals,
@@ -1947,53 +1832,82 @@ function sendLine() {
 
 function resetForm() {
   closeDone();
-  ITEMS.forEach(it => { state.hotpot[it.id] = 0; state.grill[it.id] = 0; });
-  MAMA_PRICES.forEach(p => state.mama[p] = 0);
-  EXTRAS.forEach((_, i) => state.extra[i] = 0);
-  SET_MENUS.forEach((_, i) => state.set[i] = 0);
-  state.soup = state.spice = state.sauce = state.gspice = state.gsauce = '';
+  MENU.forEach(m => state.qty[m.id] = 0);
+  state.soup = state.spice = state.sauce = '';
   document.querySelectorAll('.chip-grid .chip').forEach(c => c.classList.remove('on'));
   document.querySelectorAll('.chip-grid').forEach(g => g.classList.remove('missing'));
-  if (state.branch) pickBranch(state.branch);
-  ['addrText', 'addrNote', 'remark', 'wantTime'].forEach(id => $(id).value = '');
+  ['addrText', 'addrNote', 'remark'].forEach(id => $(id).value = '');
   document.querySelectorAll('.input.error').forEach(el => el.classList.remove('error'));
   clearPin();
   $('slip-input').value = '';
   resetSlipBox();
   $('slip-hint').textContent = 'แนบแล้วระบบจะอ่านข้อมูลในสลิปให้ร้านตรวจสอบอัตโนมัติ';
   showErrors([]);
-  renderItemList('hotpot'); renderItemList('grill');
-  renderMamaList(); renderExtraList(); renderSetList();
   refresh();
   window.scrollTo({ top: 0, behavior: 'smooth' });
   toast('ล้างออเดอร์แล้ว เริ่มสั่งใหม่ได้เลย');
 }
 
 /* ════════════════════════════════════════════════════════════
+   โหมดตั้งพิกัดร้าน — เปิด index.html?setshop=1 ครั้งเดียวตอนติดตั้ง
+   ════════════════════════════════════════════════════════════ */
+function maybeShopSetup() {
+  if (!/[?&]setshop\b/.test(location.search)) return;
+  $('shop-root').innerHTML = `
+    <div class="shop-setup">
+      <div class="card card-pad">
+        <h2 style="font-size:18px;font-weight:800;">📌 ตั้งพิกัดหน้าร้าน</h2>
+        <p class="hint" style="margin-top:6px;">
+          จิ้มตำแหน่งหน้าร้านบนแผนที่ (ลากหมุดปรับได้) แล้วเอาตัวเลขที่ได้ไปวางแทนบรรทัด
+          <code>lat</code> กับ <code>lng</code> ใน <code>const SHOP</code> ของไฟล์ <code>index.html</code><br>
+          ทำครั้งเดียวตอนติดตั้ง ลูกค้าไม่เห็นหน้านี้
+        </p>
+        <div id="shop-map"></div>
+        <div class="snippet" id="shop-snippet">ยังไม่ได้จิ้มตำแหน่ง</div>
+        <div class="btn-row">
+          <button type="button" class="btn-dark key" style="flex:1;"
+                  onclick="copyText(window.__shopLine || '', 'คัดลอกพิกัดแล้ว')">📋 คัดลอกไปวางในโค้ด</button>
+          <button type="button" class="btn-ghost key" onclick="location.search = '';">ปิด</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.style.overflow = 'hidden';
+
+  loadLeaflet(() => {
+    const c = shopHasPin() ? SHOP : CONFIG.mapCenter;
+    const m = L.map('shop-map').setView([c.lat, c.lng], shopHasPin() ? 17 : CONFIG.mapCenter.zoom);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap'
+    }).addTo(m);
+    let mk = null;
+    const put = (lat, lng) => {
+      const la = Number(lat.toFixed(6)), ln = Number(lng.toFixed(6));
+      if (!mk) {
+        mk = L.marker([la, ln], { draggable: true, icon: pinIcon('#0d0d0f') }).addTo(m);
+        mk.on('dragend', () => { const p = mk.getLatLng(); put(p.lat, p.lng); });
+      } else mk.setLatLng([la, ln]);
+      window.__shopLine = '  lat: ' + la + ',\n  lng: ' + ln;
+      $('shop-snippet').textContent =
+        'const SHOP = {\n  ...\n' + window.__shopLine + '\n};';
+    };
+    m.on('click', e => put(e.latlng.lat, e.latlng.lng));
+    if (shopHasPin()) put(SHOP.lat, SHOP.lng);
+    setTimeout(() => m.invalidateSize(), 80);
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
    เริ่มทำงาน
    ════════════════════════════════════════════════════════════ */
 function init() {
-  renderBranchChips();
-  renderChips('soup-chips',   SOUPS,  'soup');
-  renderChips('spice-chips',  SPICES, 'spice');
-  renderChips('sauce-chips',  SAUCES, 'sauce');
-  renderChips('gspice-chips', SPICES, 'gspice');
-  renderChips('gsauce-chips', SAUCES, 'gsauce');
-  renderItemList('hotpot');
-  renderItemList('grill');
-  renderMamaList();
-  renderExtraList();
-  renderSetList();
+  renderMenu();
+  renderChips('soup-chips',  SOUPS,  'soup');
+  renderChips('spice-chips', SPICES, 'spice');
+  renderChips('sauce-chips', SAUCES, 'sauce');
   renderBanks();
-
-  // มีสาขาเดียวที่ตั้งค่าไว้ ก็เลือกให้เลย
-  const branches = Object.keys(BRANCHES);
-  if (branches.length === 1) pickBranch(branches[0]);
-
   if (!CONFIG.requireSlip) $('slip-req').classList.add('hidden');
-
-  openCat('hotpot');
-  refresh();
+  updateDistance();   // เรียก refresh() ต่อให้เองแล้ว
+  maybeShopSetup();
 }
 init();
 </script>
